@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "System user with role-based access",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { 
+          "type": "string", 
+          "enum": ["LECTURER", "HOD", "FACULTY_ADMIN", "DEAN", "DVC", "INTERNAL_MODERATOR", "EXTERNAL_MODERATOR", "CQPA", "AUDITOR"]
+        },
+        "facultyId": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "assignedModules": { "type": "array" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Faculty": {
+      "title": "Faculty",
+      "description": "Academic faculty (e.g., Engineering, Arts)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "deanUid": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Academic department within a faculty",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "facultyId": { "type": "string" },
+        "hodUid": { "type": "string" }
+      },
+      "required": ["name", "facultyId"]
+    },
+    "Module": {
+      "title": "Module",
+      "description": "Individual academic module",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "lecturerUids": { "type": "array" },
+        "complianceStatus": { "type": "string", "enum": ["COMPLIANT", "PENDING", "NON_COMPLIANT"] },
+        "lastAuditAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "name", "departmentId"]
+    },
+    "Evidence": {
+      "title": "Compliance Evidence",
+      "description": "Uploaded document for module compliance",
+      "type": "object",
+      "properties": {
+        "moduleId": { "type": "string" },
+        "type": { "type": "string", "enum": ["STUDY_GUIDE", "ASSESSMENT_TASK", "MODERATION_REPORT", "EXAM_PAPER", "PRE_REVIEW"] },
+        "storagePath": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" },
+        "aiValidationStatus": { "type": "string", "enum": ["VALID", "INVALID", "PENDING"] },
+        "aiFeedback": { "type": "string" }
+      },
+      "required": ["moduleId", "type", "storagePath", "uploadedBy"]
+    },
+    "Questionnaire": {
+      "title": "Evaluation Questionnaire Template",
+      "description": "Dynamic evaluation questionnaire created by CQPA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["LECTURER_EVALUATION", "MODULE_EVALUATION", "UNIVERSAL"] },
+        "questions": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["title", "type", "questions"]
+    },
+    "StudentEvaluation": {
+      "title": "Student & Staff evaluation response",
+      "description": "Formative questionnaire rating and commentary records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "questionnaireId": { "type": "string" },
+        "moduleId": { "type": "string" },
+        "moduleCode": { "type": "string" },
+        "lecturerUid": { "type": "string" },
+        "lecturerName": { "type": "string" },
+        "evaluatorType": { "type": "string", "enum": ["STUDENT", "SELF", "PEER"] },
+        "ratings": { "type": "object" },
+        "comments": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["questionnaireId", "moduleCode", "lecturerUid", "ratings"]
+    },
+    "DevelopmentPlan": {
+      "title": "Syllabus & Lecturer Developmental Action Plan",
+      "description": "Suggested core developmental steps mapping low student evaluations to action plans with committed review dates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "lecturerUid": { "type": "string" },
+        "lecturerName": { "type": "string" },
+        "moduleCode": { "type": "string" },
+        "areaOfImprovement": { "type": "string" },
+        "suggestedAction": { "type": "string" },
+        "commitmentDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["PROPOSED", "COMMITTED", "UPDATED", "COMPLETED"] },
+        "updateStatement": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["lecturerUid", "areaOfImprovement", "suggestedAction", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "Global user profiles" },
+    "/faculties/{facultyId}": { "schema": "Faculty", "description": "Institutional faculties" },
+    "/faculties/{facultyId}/departments/{deptId}": { "schema": "Department", "description": "Departments per faculty" },
+    "/modules/{moduleId}": { "schema": "Module", "description": "Global list of modules" },
+    "/modules/{moduleId}/evidence/{evidenceId}": { "schema": "Evidence", "description": "Evidence documents for a specific module" },
+    "/questionnaires/{questionnaireId}": { "schema": "Questionnaire", "description": "Evaluation questionnaire definitions" },
+    "/student_evaluations/{evaluationId}": { "schema": "StudentEvaluation", "description": "Student and lecturer survey compliance submissions" },
+    "/development_plans/{planId}": { "schema": "DevelopmentPlan", "description": "Academic development action plans" }
+  }
+}

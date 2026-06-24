@@ -1,0 +1,6 @@
+{
+  "name": "VaultIQ",
+  "description": "AI-powered university academic compliance and governance platform for secure module management and moderation workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
