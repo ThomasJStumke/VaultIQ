@@ -155,12 +155,6 @@ export default function LoginPage({ onShowSignup }: LoginPageProps) {
             </button>
           </form>
         </div>
-
-        <footer className="mt-12 flex items-center gap-4 text-[10px] font-bold text-subtle-foreground uppercase tracking-widest">
-          <span>v1.0.4 Enterprise</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-surface-2" />
-          <span>Status: <span className="text-emerald-500">All Systems Operational</span></span>
-        </footer>
       </div>
     </div>
   );

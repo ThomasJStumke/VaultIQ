@@ -10,15 +10,19 @@ on conflict (id) do nothing;
 -- (simplified from storageService.ts's fuller faculty/dept/programme scheme,
 -- since that context isn't reliably available at upload time today)
 
+drop policy if exists evidence_bucket_select on storage.objects;
 create policy evidence_bucket_select on storage.objects for select
   using (bucket_id = 'evidence-vault' and auth.uid() is not null);
 
+drop policy if exists evidence_bucket_insert on storage.objects;
 create policy evidence_bucket_insert on storage.objects for insert
   with check (bucket_id = 'evidence-vault' and auth.uid() is not null);
 
+drop policy if exists evidence_bucket_update on storage.objects;
 create policy evidence_bucket_update on storage.objects for update
   using (bucket_id = 'evidence-vault' and public.has_role('HOD','FACULTY_ADMIN','DEPUTY_DEAN','EXECUTIVE_DEAN'));
 
+drop policy if exists evidence_bucket_delete on storage.objects;
 create policy evidence_bucket_delete on storage.objects for delete
   using (bucket_id = 'evidence-vault' and public.has_role('HOD','FACULTY_ADMIN','DEPUTY_DEAN','EXECUTIVE_DEAN'));
 

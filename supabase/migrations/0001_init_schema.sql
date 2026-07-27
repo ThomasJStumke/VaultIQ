@@ -24,21 +24,21 @@ $$;
 -- break every one of those string comparisons across ~15 files for no benefit.
 -- ---------------------------------------------------------------------------
 
-create table public.faculties (
+create table if not exists public.faculties (
   id text primary key,
   name text not null,
   dean_uid uuid,
   created_at timestamptz not null default now()
 );
 
-create table public.departments (
+create table if not exists public.departments (
   id text primary key,
   faculty_id text not null references public.faculties(id) on delete cascade,
   name text not null,
   hod_uid uuid,
   created_at timestamptz not null default now()
 );
-create index on public.departments (faculty_id);
+create index if not exists idx_departments_faculty_id on public.departments (faculty_id);
 
 -- ---------------------------------------------------------------------------
 -- profiles (replaces `users` collection)
@@ -52,7 +52,7 @@ create index on public.departments (faculty_id);
 -- use auth_user_id = auth.uid(), not id.
 -- ---------------------------------------------------------------------------
 
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique references auth.users(id) on delete set null,
   email text not null,
@@ -70,19 +70,27 @@ create table public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index on public.profiles (auth_user_id);
-create index on public.profiles (lower(email));
+create index if not exists idx_profiles_auth_user_id on public.profiles (auth_user_id);
+create index if not exists idx_profiles_lower_email on public.profiles (lower(email));
+drop trigger if exists trg_profiles_updated_at on public.profiles;
 create trigger trg_profiles_updated_at before update on public.profiles
   for each row execute function public.set_updated_at();
 
-alter table public.faculties add constraint faculties_dean_fk foreign key (dean_uid) references public.profiles(id);
-alter table public.departments add constraint departments_hod_fk foreign key (hod_uid) references public.profiles(id);
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'faculties_dean_fk') then
+    alter table public.faculties add constraint faculties_dean_fk foreign key (dean_uid) references public.profiles(id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'departments_hod_fk') then
+    alter table public.departments add constraint departments_hod_fk foreign key (hod_uid) references public.profiles(id);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- modules / evidence
 -- ---------------------------------------------------------------------------
 
-create table public.modules (
+create table if not exists public.modules (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
@@ -95,11 +103,12 @@ create table public.modules (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-create index on public.modules (department_id);
+create index if not exists idx_modules_department_id on public.modules (department_id);
+drop trigger if exists trg_modules_updated_at on public.modules;
 create trigger trg_modules_updated_at before update on public.modules
   for each row execute function public.set_updated_at();
 
-create table public.evidence (
+create table if not exists public.evidence (
   id uuid primary key default gen_random_uuid(),
   module_id uuid not null references public.modules(id) on delete cascade,
   type text not null check (type in ('STUDY_GUIDE','ASSESSMENT_TASK','MODERATION_REPORT','EXAM_PAPER','PRE_REVIEW')),
@@ -119,13 +128,13 @@ create table public.evidence (
   front_page_data jsonb,
   created_at timestamptz not null default now()
 );
-create index on public.evidence (module_id);
+create index if not exists idx_evidence_module_id on public.evidence (module_id);
 
 -- ---------------------------------------------------------------------------
 -- questionnaires / student_evaluations / development_plans
 -- ---------------------------------------------------------------------------
 
-create table public.questionnaires (
+create table if not exists public.questionnaires (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   type text not null check (type in ('LECTURER_EVALUATION','MODULE_EVALUATION','UNIVERSAL')),
@@ -134,7 +143,7 @@ create table public.questionnaires (
   created_at timestamptz not null default now()
 );
 
-create table public.student_evaluations (
+create table if not exists public.student_evaluations (
   id uuid primary key default gen_random_uuid(),
   questionnaire_id uuid references public.questionnaires(id),
   module_code text not null,
@@ -145,9 +154,9 @@ create table public.student_evaluations (
   comments text,
   submitted_at timestamptz not null default now()
 );
-create index on public.student_evaluations (module_code);
+create index if not exists idx_student_evaluations_module_code on public.student_evaluations (module_code);
 
-create table public.development_plans (
+create table if not exists public.development_plans (
   id uuid primary key default gen_random_uuid(),
   lecturer_uid text not null,
   lecturer_name text,
@@ -159,6 +168,7 @@ create table public.development_plans (
   update_statement text,
   updated_at timestamptz not null default now()
 );
+drop trigger if exists trg_devplans_updated_at on public.development_plans;
 create trigger trg_devplans_updated_at before update on public.development_plans
   for each row execute function public.set_updated_at();
 
@@ -166,17 +176,18 @@ create trigger trg_devplans_updated_at before update on public.development_plans
 -- surveys / survey_responses / survey_invitations
 -- ---------------------------------------------------------------------------
 
-create table public.surveys (
+create table if not exists public.surveys (
   id uuid primary key default gen_random_uuid(),
   title text,
   data jsonb not null default '{}', -- survey definition shape is undocumented (typed `any` in source)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists trg_surveys_updated_at on public.surveys;
 create trigger trg_surveys_updated_at before update on public.surveys
   for each row execute function public.set_updated_at();
 
-create table public.survey_responses (
+create table if not exists public.survey_responses (
   id uuid primary key default gen_random_uuid(),
   survey_id uuid references public.surveys(id),
   module_code text,
@@ -184,9 +195,9 @@ create table public.survey_responses (
   comments text,
   submitted_at timestamptz not null default now()
 );
-create index on public.survey_responses (survey_id);
+create index if not exists idx_survey_responses_survey_id on public.survey_responses (survey_id);
 
-create table public.survey_invitations (
+create table if not exists public.survey_invitations (
   id uuid primary key default gen_random_uuid(),
   survey_id uuid references public.surveys(id),
   token text not null unique,
@@ -199,13 +210,13 @@ create table public.survey_invitations (
   used_at timestamptz,
   sent_at timestamptz not null default now()
 );
-create index on public.survey_invitations (token);
+create index if not exists idx_survey_invitations_token on public.survey_invitations (token);
 
 -- ---------------------------------------------------------------------------
 -- student_lists (pseudo-1:1 with module in Firestore -> unique FK here)
 -- ---------------------------------------------------------------------------
 
-create table public.student_lists (
+create table if not exists public.student_lists (
   id uuid primary key default gen_random_uuid(),
   module_id uuid not null references public.modules(id) on delete cascade unique,
   module_code text not null,
@@ -218,7 +229,7 @@ create table public.student_lists (
 -- question_bank / standard_templates / policy_documents / department_guidelines
 -- ---------------------------------------------------------------------------
 
-create table public.question_bank (
+create table if not exists public.question_bank (
   id uuid primary key default gen_random_uuid(),
   text text not null,
   type text not null,
@@ -230,7 +241,7 @@ create table public.question_bank (
 );
 
 -- caller-supplied id in Firestore (setDoc by id) -> caller-supplied uuid here (client generates via crypto.randomUUID())
-create table public.standard_templates (
+create table if not exists public.standard_templates (
   id uuid primary key,
   template_type text not null,
   file_name text not null,
@@ -240,7 +251,7 @@ create table public.standard_templates (
   updated_at timestamptz not null default now()
 );
 
-create table public.policy_documents (
+create table if not exists public.policy_documents (
   id uuid primary key,
   title text,
   file_name text,
@@ -249,7 +260,7 @@ create table public.policy_documents (
   updated_at timestamptz not null default now()
 );
 
-create table public.department_guidelines (
+create table if not exists public.department_guidelines (
   department_id text primary key references public.departments(id) on delete cascade,
   content jsonb not null default '{}',
   updated_at timestamptz not null default now()
@@ -259,7 +270,7 @@ create table public.department_guidelines (
 -- notifications / report_templates
 -- ---------------------------------------------------------------------------
 
-create table public.notifications (
+create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.profiles(id),
   title text not null,
@@ -270,9 +281,9 @@ create table public.notifications (
   escalation_tier int,
   created_at timestamptz not null default now()
 );
-create index on public.notifications (created_at desc);
+create index if not exists idx_notifications_created_at_desc on public.notifications (created_at desc);
 
-create table public.report_templates (
+create table if not exists public.report_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   description text,
@@ -284,5 +295,6 @@ create table public.report_templates (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists trg_report_templates_updated_at on public.report_templates;
 create trigger trg_report_templates_updated_at before update on public.report_templates
   for each row execute function public.set_updated_at();
