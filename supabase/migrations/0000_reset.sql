@@ -46,5 +46,13 @@ drop table if exists
   public.faculties
 cascade;
 
-delete from storage.objects where bucket_id = 'evidence-vault';
-delete from storage.buckets where id = 'evidence-vault';
+-- NOTE: intentionally NOT deleting from storage.objects/storage.buckets here.
+-- Supabase blocks direct SQL deletes on those tables (a storage.protect_delete()
+-- trigger raises "Direct deletion from storage tables is not allowed"), and
+-- since the SQL Editor runs a whole pasted script as one implicit transaction,
+-- that error rolled back everything above too -- including the table drops --
+-- which is exactly why the schema stayed stuck in its old broken shape across
+-- every previous attempt. If you want the evidence-vault bucket's files
+-- cleared, do it from the dashboard (Storage -> evidence-vault -> select all
+-- -> delete) or via the Storage API, not from here. 0003_storage.sql recreates
+-- the bucket itself (on conflict do nothing) regardless.
