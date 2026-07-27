@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, LayoutGrid, ToggleLeft, Loader2, ShieldAlert } from 'lucide-react';
+import { Settings, LayoutGrid, ToggleLeft, Users, Loader2, ShieldAlert } from 'lucide-react';
 import { cn } from '../lib/utils';
 import {
   getAllRoles,
@@ -9,38 +9,51 @@ import {
   getAllPageActions,
   getRolePageActionMatrix,
   setRolePageAction,
+  getAllUsers,
+  getUserRoleMatrix,
+  addRoleToUser,
+  removeRoleFromUser,
   RoleRow,
   PageRow,
   PageActionRow,
+  UserRow,
 } from '../services/rbacService';
 
-type Tab = 'pages' | 'actions';
+type Tab = 'pages' | 'actions' | 'users';
 
 export default function PlatformSetup() {
   const [tab, setTab] = useState<Tab>('pages');
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<RoleRow[]>([]);
+  const [allRoles, setAllRoles] = useState<RoleRow[]>([]);
   const [pages, setPages] = useState<PageRow[]>([]);
   const [pageActionsByPage, setPageActionsByPage] = useState<Record<string, PageActionRow[]>>({});
   const [pageMatrix, setPageMatrix] = useState<Set<string>>(new Set());
   const [actionMatrix, setActionMatrix] = useState<Set<string>>(new Set());
   const [selectedPageKey, setSelectedPageKey] = useState<string>('');
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [userRoleMatrix, setUserRoleMatrix] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
-      const [r, p, pa, pm, am] = await Promise.all([
+      const [r, p, pa, pm, am, u, urm] = await Promise.all([
         getAllRoles(),
         getAllPagesFull(),
         getAllPageActions(),
         getRolePageMatrix(),
         getRolePageActionMatrix(),
+        getAllUsers(),
+        getUserRoleMatrix(),
       ]);
       setRoles(r.filter((role) => role.name !== 'SUPER_ADMIN'));
+      setAllRoles(r);
       setPages(p);
       setPageActionsByPage(pa);
       setPageMatrix(pm);
       setActionMatrix(am);
       setSelectedPageKey(p.find((page) => page.key !== 'platform_setup')?.key || '');
+      setUsers(u);
+      setUserRoleMatrix(urm);
       setLoading(false);
     })();
   }, []);
@@ -67,6 +80,19 @@ export default function PlatformSetup() {
       return next;
     });
     await setRolePageAction(roleId, pageActionId, allowed);
+  };
+
+  const toggleUserRole = async (userId: string, roleId: string) => {
+    const key = `${userId}:${roleId}`;
+    const assigned = !userRoleMatrix.has(key);
+    setUserRoleMatrix((prev) => {
+      const next = new Set(prev);
+      if (assigned) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+    if (assigned) await addRoleToUser(userId, roleId);
+    else await removeRoleFromUser(userId, roleId);
   };
 
   if (loading) {
@@ -121,6 +147,15 @@ export default function PlatformSetup() {
             )}
           >
             <ToggleLeft className="w-3.5 h-3.5" /> Action Setup
+          </button>
+          <button
+            onClick={() => setTab('users')}
+            className={cn(
+              'px-4 py-2.5 text-xs font-black uppercase tracking-widest rounded-t-xl transition flex items-center gap-2',
+              tab === 'users' ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white'
+            )}
+          >
+            <Users className="w-3.5 h-3.5" /> Users
           </button>
         </div>
       </div>
@@ -233,6 +268,69 @@ export default function PlatformSetup() {
                   <tr>
                     <td colSpan={roles.length + 1} className="p-8 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">
                       No actions defined for this page yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'users' && (
+        <div className="glass-card overflow-hidden">
+          <div className="p-6 border-b border-white/5">
+            <h4 className="text-sm font-black text-white uppercase tracking-tight">Which roles each user holds</h4>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">
+              Toggle a cell to grant or revoke a role for a user. Users can hold more than one role.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[900px]">
+              <thead>
+                <tr className="border-b border-white/5">
+                  <th className="p-4 text-[10px] font-black text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-950">User</th>
+                  {allRoles.map((r) => (
+                    <th key={r.id} className="p-4 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center">
+                      {r.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                    <td className="p-4 sticky left-0 bg-slate-950">
+                      <p className="text-xs font-bold text-white">{u.display_name}</p>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        {u.email}
+                        {u.is_placeholder && ' · Invited'}
+                      </p>
+                    </td>
+                    {allRoles.map((r) => {
+                      const checked = userRoleMatrix.has(`${u.id}:${r.id}`);
+                      return (
+                        <td key={r.id} className="p-4 text-center">
+                          <button
+                            onClick={() => toggleUserRole(u.id, r.id)}
+                            className={cn(
+                              'w-5 h-5 rounded-md border transition mx-auto flex items-center justify-center cursor-pointer',
+                              checked
+                                ? 'bg-indigo-600 border-indigo-500'
+                                : 'bg-white/5 border-white/10 hover:border-white/30'
+                            )}
+                          >
+                            {checked && <div className="w-2 h-2 rounded-sm bg-white" />}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td colSpan={allRoles.length + 1} className="p-8 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">
+                      No users yet.
                     </td>
                   </tr>
                 )}

@@ -139,3 +139,32 @@ export async function setRolePageAction(roleId: string, pageActionId: string, al
 export async function addRoleToUser(userId: string, roleId: string) {
   await supabase.from('user_type').insert({ user_id: userId, role_id: roleId });
 }
+
+export async function removeRoleFromUser(userId: string, roleId: string) {
+  await supabase.from('user_type').delete().eq('user_id', userId).eq('role_id', roleId);
+}
+
+// ---------------------------------------------------------------------------
+// Admin data (Platform Setup: Users tab)
+// ---------------------------------------------------------------------------
+
+export interface UserRow {
+  id: string;
+  email: string;
+  display_name: string;
+  status: string;
+  is_placeholder: boolean;
+}
+
+export async function getAllUsers(): Promise<UserRow[]> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, email, display_name, status, is_placeholder')
+    .order('display_name', { ascending: true });
+  return (data ?? []) as UserRow[];
+}
+
+export async function getUserRoleMatrix(): Promise<Set<string>> {
+  const { data } = await supabase.from('user_type').select('user_id, role_id');
+  return new Set((data ?? []).map((r: any) => `${r.user_id}:${r.role_id}`));
+}
