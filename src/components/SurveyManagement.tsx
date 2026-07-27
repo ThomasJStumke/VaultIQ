@@ -662,46 +662,23 @@ export default function SurveyManagement({ initialQpoSubTab }: { initialQpoSubTa
         });
         const overallScore = totalRatingsCount > 0 ? Number((totalRatingsSum / totalRatingsCount).toFixed(2)) : 0;
 
-        // 3. Summarize Areas for Improvement using Gemini with a robust fallback
+        // 3. Summarize Areas for Improvement: lowest-scoring questions + a
+        // comments-review reminder if any free-text feedback was left.
         let areasForImprovement: string[] = [];
-        try {
-          const summaryRes = await fetch('/api/summarize-evaluations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              moduleCode,
-              surveyTitle: survey.title,
-              questions: survey.questions,
-              responses: moduleResponses.map(r => ({ ratings: r.ratings, comments: r.comments }))
-            })
-          });
-          
-          if (summaryRes.ok) {
-            const summaryData = await summaryRes.json();
-            areasForImprovement = summaryData.areasForImprovement || [];
-          } else {
-            throw new Error('Summary API returned error status');
-          }
-        } catch (summaryErr) {
-          console.warn('Gemini evaluation summary failed, using programmatic fallback:', summaryErr);
-          
-          // Programmatic Fallback: Identify the lowest scoring 2 questions
-          const questionAverages = survey.questions.map((qText, idx) => {
-            const ratingsForQ = moduleResponses.map(r => r.ratings[idx] !== undefined ? r.ratings[idx] : 5);
-            const avg = ratingsForQ.reduce((sum, val) => sum + val, 0) / ratingsForQ.length;
-            return { text: qText, avg };
-          });
-          
-          const sortedQuestions = [...questionAverages].sort((a, b) => a.avg - b.avg);
-          areasForImprovement = sortedQuestions
-            .slice(0, 2)
-            .map(q => `Enhance learning delivery and support for: "${q.text}" (Average Score: ${q.avg.toFixed(1)}/5)`);
-          
-          // If comments exist, add a general reminder bullet
-          const commentsCount = moduleResponses.filter(r => r.comments && r.comments.trim()).length;
-          if (commentsCount > 0) {
-            areasForImprovement.push(`Review student focus groups regarding pacing, grading clarity, and turnaround feedback.`);
-          }
+        const questionAverages = survey.questions.map((qText, idx) => {
+          const ratingsForQ = moduleResponses.map(r => r.ratings[idx] !== undefined ? r.ratings[idx] : 5);
+          const avg = ratingsForQ.reduce((sum, val) => sum + val, 0) / ratingsForQ.length;
+          return { text: qText, avg };
+        });
+
+        const sortedQuestions = [...questionAverages].sort((a, b) => a.avg - b.avg);
+        areasForImprovement = sortedQuestions
+          .slice(0, 2)
+          .map(q => `Enhance learning delivery and support for: "${q.text}" (Average Score: ${q.avg.toFixed(1)}/5)`);
+
+        const commentsCount = moduleResponses.filter(r => r.comments && r.comments.trim()).length;
+        if (commentsCount > 0) {
+          areasForImprovement.push(`Review student focus groups regarding pacing, grading clarity, and turnaround feedback.`);
         }
 
         // 4. Create one SINGLE aggregate student_evaluation document for this module

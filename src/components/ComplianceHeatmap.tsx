@@ -24,9 +24,7 @@ import {
   History,
   FileSpreadsheet,
   Sparkles,
-  Send,
   HelpCircle,
-  Bot
 } from 'lucide-react';
 import { subscribeToModules, subscribeToEvidence, uploadEvidenceMetadata, updateModuleCompliance } from '../services/supabaseService';
 import { useAuth } from '../hooks/useAuth';
@@ -64,24 +62,6 @@ export default function ComplianceHeatmap() {
   const [modules, setModules] = useState<ModuleWithEvidence[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-
-  // AI Quality Reporting Scribe State
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [aiReportResult, setAiReportResult] = useState<{
-    reportTitle: string;
-    scopedBoundary: string;
-    analysisSummary: string;
-    filteredModules: Array<{
-      code: string;
-      name: string;
-      requirement: string;
-      status: string;
-      valDate: string;
-    }>;
-    suggestedCsv: string;
-  } | null>(null);
 
   // Toggle for layout view of report center style
   const [isReportCenterOpen, setIsReportCenterOpen] = useState(false);
@@ -372,54 +352,6 @@ export default function ComplianceHeatmap() {
     document.body.removeChild(link);
   };
 
-  // Submit search query to the server-side AI Report Scribe
-  const handleAIScribeQuery = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aiPrompt.trim()) return;
-
-    setAiLoading(true);
-    setAiError('');
-    setAiReportResult(null);
-
-    try {
-      const response = await fetch('/api/generate-custom-report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: aiPrompt,
-          modules: modules,
-          departments: DEPARTMENTS
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to communicate with AI report writer agency');
-      }
-
-      const result = await response.json();
-      setAiReportResult(result);
-    } catch (err: any) {
-      console.error('AI Scribe Error:', err);
-      setAiError(err.message || 'The AI custom scribe was unable to digest the raw stats. Please re-trigger.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleDownloadCustomAIReport = (reportTitle: string, boundaryName: string, csvContent: string) => {
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${reportTitle.replace(/\s+/g, '_')}_${boundaryName.replace(/\s+/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const filteredModules = modules.filter(m => {
     const term = searchQuery.toLowerCase();
     return m.code.toLowerCase().includes(term) || m.name.toLowerCase().includes(term);
@@ -479,7 +411,7 @@ export default function ComplianceHeatmap() {
                 Institutional Reporting & Evidence Export Hub
               </h3>
               <p className="text-muted-foreground text-xs font-semibold uppercase tracking-widest mt-0.5">
-                Generate formal regulatory spreadsheets & consult AI scribe for senate audits
+                Generate formal regulatory spreadsheets for senate audits
               </p>
             </div>
 
@@ -501,9 +433,9 @@ export default function ComplianceHeatmap() {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden space-y-8"
               >
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  {/* Left segment: Ready-Made Direct Exports */}
-                  <div className="lg:col-span-4 space-y-4">
+                <div className="grid grid-cols-1">
+                  {/* Ready-Made Direct Exports */}
+                  <div className="space-y-4 max-w-lg">
                     <div>
                       <h4 className="text-sm font-black text-foreground tracking-tight uppercase flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
@@ -566,163 +498,6 @@ export default function ComplianceHeatmap() {
                     </div>
                   </div>
 
-                  {/* Right segment: AI Quality Report Scribe */}
-                  <div className="lg:col-span-8 p-6 bg-surface-sunken border border-border-subtle rounded-3xl flex flex-col justify-between gap-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl">
-                          <Sparkles className="w-5 h-5 animate-pulse" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-foreground tracking-tight uppercase">AI Report Scribe & Butler Assistant</h4>
-                          <p className="text-[11px] text-muted-foreground font-medium leading-normal">
-                            Type what slice of compliance stats you need (e.g. "Draft study guides audit report for Information Technology" or "Non-compliant courses in Accounting"). Scribe will filter the data, summarize risks, and generate your custom export.
-                          </p>
-                        </div>
-                      </div>
-
-                      <form onSubmit={handleAIScribeQuery} className="flex gap-2.5">
-                        <input 
-                          type="text" 
-                          placeholder='E.g., "Show me all missing mod reports in Accounting" or "Syllabus Audit CS modules"'
-                          className="flex-1 bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground placeholder:text-subtle-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition font-medium"
-                          value={aiPrompt}
-                          onChange={(e) => setAiPrompt(e.target.value)}
-                        />
-                        <button 
-                          type="submit"
-                          disabled={aiLoading || !aiPrompt.trim()}
-                          className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-foreground rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-                        >
-                          {aiLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-foreground" />
-                          ) : (
-                            <Send className="w-3.5 h-3.5" />
-                          )}
-                          {aiLoading ? 'Scribing...' : 'Consult'}
-                        </button>
-                      </form>
-
-                      {/* Pill suggestions for fast prompting */}
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          'Syllabus Audit IT modules study guides',
-                          'Missing moderation reports in Accounting',
-                          'Overall critical compliance risk summary'
-                        ].map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            onClick={() => setAiPrompt(suggestion)}
-                            className="px-3 py-1.5 bg-surface-tint hover:bg-surface-tint-strong rounded-full text-[9px] font-bold text-muted-foreground hover:text-foreground transition cursor-pointer border border-border-subtle"
-                          >
-                            + {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Scribe Result Container */}
-                    <div className="flex-1 relative">
-                      {aiLoading && (
-                        <div className="py-12 flex flex-col items-center justify-center gap-2">
-                          <Loader2 className="w-7 h-7 text-indigo-400 animate-spin" />
-                          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                            Extracting Registry Ledger & Feeding Gemini-3.5-Flash...
-                          </p>
-                        </div>
-                      )}
-
-                      {aiError && (
-                        <div className="p-4 bg-rose-500/10 border border-rose-500/25 text-rose-400 rounded-2xl text-xs font-bold uppercase tracking-wide flex items-center gap-2 leading-relaxed">
-                          <ShieldAlert className="w-5 h-5 shrink-0" />
-                          <span>{aiError}</span>
-                        </div>
-                      )}
-
-                      {aiReportResult && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="border border-indigo-500/20 bg-indigo-500/5 rounded-2xl p-5 space-y-4"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/10 pb-3">
-                            <div>
-                              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Suggested Dynamic Report</p>
-                              <h5 className="text-sm font-black text-foreground tracking-tight uppercase mt-0.5">
-                                {aiReportResult.reportTitle}
-                              </h5>
-                              <p className="text-[9px] font-bold text-subtle-foreground uppercase mt-0.5 tracking-wider">
-                                Boundary Match: <span className="text-foreground/80 font-black">{aiReportResult.scopedBoundary}</span> • Date Extracted: <span className="text-foreground/80 font-black">{new Date().toLocaleDateString('en-GB')}</span>
-                              </p>
-                            </div>
-                            
-                            <button
-                              onClick={() => handleDownloadCustomAIReport(aiReportResult.reportTitle, aiReportResult.scopedBoundary, aiReportResult.suggestedCsv)}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-foreground rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center gap-1.5 shrink-0 cursor-pointer border border-border"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Export CSV Sheet
-                            </button>
-                          </div>
-
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest italic">AI Quality Analysis overview</p>
-                            <p className="text-xs text-foreground/80 font-medium leading-relaxed">
-                              {aiReportResult.analysisSummary}
-                            </p>
-                          </div>
-
-                          {/* Mini Suggested Data Grid preview */}
-                          <div className="space-y-1.5 pt-1">
-                            <p className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest">Filtered Stats Preview ({aiReportResult.filteredModules?.length || 0} nodes)</p>
-                            
-                            <div className="max-h-[120px] overflow-y-auto border border-border-subtle rounded-xl bg-surface-sunken text-[10px]">
-                              {aiReportResult.filteredModules?.length > 0 ? (
-                                <table className="w-full text-left font-sans text-muted-foreground">
-                                  <thead className="bg-surface-tint text-[9px] font-black text-subtle-foreground uppercase tracking-wider">
-                                    <tr>
-                                      <th className="p-2">Code</th>
-                                      <th className="p-2">File Requirement</th>
-                                      <th className="p-2">Live Status</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-white/5 font-semibold">
-                                    {aiReportResult.filteredModules.map((item, idx) => (
-                                      <tr key={idx} className="hover:bg-foreground/[0.02]">
-                                        <td className="p-2 font-black text-foreground/80 tracking-tight">{item.code}</td>
-                                        <td className="p-2 uppercase text-[9px]">{item.requirement || 'General'}</td>
-                                        <td className="p-2">
-                                          <span className={cn(
-                                            "inline-block w-1.5 h-1.5 rounded-full mr-1.5",
-                                            item.status === 'COMPLIANT' ? 'bg-emerald-400' :
-                                            item.status === 'PARTIAL' ? 'bg-amber-400' : 'bg-rose-500'
-                                          )} />
-                                          <span className="uppercase text-[9px] font-black">{item.status}</span>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              ) : (
-                                <div className="p-4 text-center text-subtle-foreground font-black uppercase text-[10px]">
-                                  No modules flagged in filtering window
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {!aiLoading && !aiError && !aiReportResult && (
-                        <div className="h-full flex flex-col items-center justify-center p-8 border border-dashed border-border-subtle rounded-2xl bg-foreground/[0.01]">
-                          <Bot className="w-8 h-8 text-subtle-foreground mb-2 animate-bounce" style={{ fill: 'none' }} />
-                          <p className="text-[10px] font-extrabold text-subtle-foreground uppercase tracking-widest text-center">
-                            Waiting for Scribe prompting...
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
                 </div>
               </motion.div>
             )}

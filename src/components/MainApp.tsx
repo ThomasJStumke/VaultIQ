@@ -16,7 +16,7 @@ import {
   Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth, hasPage } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import {
   getPermissionForRoles,
@@ -183,8 +183,20 @@ const ROLE_NAV_ITEMS: Record<Role, { id: string; label: string; icon: React.Comp
 
 const PLATFORM_SETUP_ITEM = { id: 'platform_setup', label: 'Platform Setup', icon: Settings };
 
+// Maps each nav item's id to the `pages.key` Platform Setup's Page Setup
+// screen actually edits (role_pages). Most ids match 1:1; a few nav-item
+// variants (e.g. the three Exams-role print/status/location shortcuts, or
+// QPO's two Survey Management sub-tabs) share one underlying page.
+const ITEM_ID_TO_PAGE_KEY: Record<string, string> = {
+  exams_status: 'status_management',
+  exams_location: 'location_association',
+  exams_print: 'exams_control',
+  surveys_campaigns: 'surveys',
+  surveys_qbank: 'surveys',
+};
+
 export default function MainApp() {
-  const { profile, logout, isSuperAdmin } = useAuth();
+  const { profile, logout, isSuperAdmin, visiblePages } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
 
@@ -192,7 +204,9 @@ export default function MainApp() {
   const dummyModule: any = { id: 'demo', code: 'ENG101', name: 'Software Engineering Fundamentals' };
 
   // A user can hold multiple roles now — the nav is the union of every
-  // mapped role's items (deduped by id), plus Platform Setup for super admins.
+  // mapped role's items (deduped by id), further filtered by whether
+  // Platform Setup's Page Setup screen (role_pages) actually grants that
+  // page to any of the user's roles, plus Platform Setup for super admins.
   const mappedRoles = mapUserRolesToRoles(profile?.roles);
   const currentNavItems = React.useMemo(() => {
     const seen = new Map<string, (typeof ROLE_NAV_ITEMS)['Lecturer'][number]>();
@@ -201,9 +215,11 @@ export default function MainApp() {
         if (!seen.has(item.id)) seen.set(item.id, item);
       }
     }
-    const items = Array.from(seen.values());
+    const items = Array.from(seen.values()).filter((item) =>
+      hasPage(visiblePages, isSuperAdmin, ITEM_ID_TO_PAGE_KEY[item.id] || item.id)
+    );
     return isSuperAdmin ? [...items, PLATFORM_SETUP_ITEM as any] : items;
-  }, [mappedRoles, isSuperAdmin]);
+  }, [mappedRoles, isSuperAdmin, visiblePages]);
 
   // Automatically reset to the first allowed tab if the selected tab is unauthorized for the current role(s)
   React.useEffect(() => {

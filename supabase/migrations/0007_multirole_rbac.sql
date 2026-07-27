@@ -10,11 +10,16 @@
 -- from here on; profiles.role is synced to the user's first/primary role by
 -- bootstrap_profile() and addStaffMember so both stay consistent.
 --
--- NOTE: Platform Setup's Page Setup screen edits role_pages/role_page_actions,
--- but the app's sidebar (MainApp.tsx) still renders from the static
--- permissions.config.ts + ROLE_NAV_ITEMS matrix, not from these tables yet --
--- wiring MainApp's nav to read role_pages is a follow-up, not done here.
--- RLS enforcement (has_role(), below) DOES use these tables already.
+-- Platform Setup's Page Setup screen edits role_pages/role_page_actions, and
+-- MainApp.tsx's sidebar (see ITEM_ID_TO_PAGE_KEY there) filters its per-role
+-- ROLE_NAV_ITEMS candidate list through role_pages -- unchecking a page for a
+-- role there actually hides it from the sidebar. RLS (has_role(), below)
+-- checks these same tables.
+--
+-- Action Setup (role_page_actions) is populated and editable, but nothing in
+-- the app yet gates a specific button/action through it -- that per-action
+-- wiring (e.g. "can this role see the Upload button on this page") is still
+-- a follow-up.
 
 create extension if not exists pgcrypto;
 
