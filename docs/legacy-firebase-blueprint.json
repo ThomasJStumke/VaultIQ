@@ -117,6 +117,38 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["lecturerUid", "areaOfImprovement", "suggestedAction", "status"]
+    },
+    "StandardTemplate": {
+      "title": "Standard Institutional Template",
+      "description": "Standard template uploaded by QPO for other roles to download",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "templateType": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["templateType", "fileName", "fileSize", "updatedBy"]
+    },
+    "ReportTemplate": {
+      "title": "Report Template",
+      "description": "Flexible report layout mapping database fields to custom formats",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "entityType": { "type": "string", "enum": ["module", "department", "faculty", "lecturer"] },
+        "layout": { "type": "string", "enum": ["table", "grid", "academic_dossier", "scorecard"] },
+        "fields": { "type": "array" },
+        "styles": { "type": "object" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "entityType", "layout", "fields"]
     }
   },
   "firestore": {
@@ -127,6 +159,8 @@
     "/modules/{moduleId}/evidence/{evidenceId}": { "schema": "Evidence", "description": "Evidence documents for a specific module" },
     "/questionnaires/{questionnaireId}": { "schema": "Questionnaire", "description": "Evaluation questionnaire definitions" },
     "/student_evaluations/{evaluationId}": { "schema": "StudentEvaluation", "description": "Student and lecturer survey compliance submissions" },
-    "/development_plans/{planId}": { "schema": "DevelopmentPlan", "description": "Academic development action plans" }
+    "/development_plans/{planId}": { "schema": "DevelopmentPlan", "description": "Academic development action plans" },
+    "/standard_templates/{templateId}": { "schema": "StandardTemplate", "description": "Official standard templates uploaded by QPO" },
+    "/report_templates/{templateId}": { "schema": "ReportTemplate", "description": "Admin configurable report templates" }
   }
 }

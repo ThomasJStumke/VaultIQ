@@ -17,7 +17,13 @@ import {
   ShieldCheck,
   ShieldAlert,
   FileText,
-  BookOpen
+  BookOpen,
+  Library,
+  FileSpreadsheet,
+  FileUp,
+  RefreshCw,
+  Trash2,
+  Scale
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { DocCategory, Module } from '../types';
@@ -31,8 +37,35 @@ import {
   deleteEvidence, 
   updateEvidence,
   addNotification,
-  updateModule 
-} from '../services/firebaseService';
+  updateModule,
+  subscribeToStandardTemplates,
+  uploadStandardTemplate,
+  deleteStandardTemplate,
+  subscribeToPolicyDocuments,
+  uploadPolicyDocument,
+  deletePolicyDocument,
+  subscribeToDepartmentGuidelines,
+  uploadDepartmentGuidelines,
+  deleteDepartmentGuidelines
+} from '../services/supabaseService';
+
+const DEPARTMENTS = [
+  { id: 'FAI_AUD_TAX', facultyId: 'FAI', name: 'Department of Auditing and Taxation', code: 'AUD_TAX' },
+  { id: 'FAI_MGT_ACC', facultyId: 'FAI', name: 'Department of Management Accounting', code: 'MGT_ACC' },
+  { id: 'FAI_FIN_ACC', facultyId: 'FAI', name: 'Department of Financial Accounting', code: 'FIN_ACC' },
+  { id: 'FAI_IT', facultyId: 'FAI', name: 'Department of Information Technology', code: 'INF_TECH' },
+  { id: 'FAI_IS', facultyId: 'FAI', name: 'Department of Information Systems', code: 'INF_SYS' },
+  { id: 'FAI_ICM', facultyId: 'FAI', name: 'Department of Information Communications Management', code: 'INF_ICM' },
+  { id: 'CS', facultyId: 'FID', name: 'Computer Science', code: 'CS' },
+  { id: 'IT', facultyId: 'FID', name: 'Information Technology', code: 'IT' },
+  { id: 'SOC', facultyId: 'FID', name: 'Social Sciences', code: 'SOC' },
+  { id: 'CIV', facultyId: 'EBE', name: 'Civil Engineering', code: 'CIV' },
+  { id: 'ELE', facultyId: 'EBE', name: 'Electrical Engineering', code: 'ELE' },
+  { id: 'MEC', facultyId: 'EBE', name: 'Mechanical Engineering', code: 'MEC' },
+  { id: 'ACCT', facultyId: 'BMS', name: 'Accountancy', code: 'ACCT' },
+  { id: 'MGT', facultyId: 'BMS', name: 'Management', code: 'MGT' },
+  { id: 'MATH', facultyId: 'FAS', name: 'Mathematics', code: 'MATH' },
+];
 
 const CATEGORIES: { id: DocCategory; label: string; color: string; description: string }[] = [
   { id: 'CURRICULUM', label: 'Curriculum', color: 'text-blue-400', description: 'Academic frameworks and study guides' },
@@ -54,7 +87,7 @@ interface VaultFile {
   version: number;
 }
 
-export default function FileVault() {
+export default function FileVault({ initialTab }: { initialTab?: 'explorer' | 'templates' | 'policies' | 'departmental' } = {}) {
   const { profile } = useAuth();
   const mappedRole = profile?.role ? mapUserRoleToRole(profile.role) : null;
   const permission = mappedRole ? getPermission(mappedRole, 'File Vault') : { access: 'none' };
@@ -127,6 +160,239 @@ export default function FileVault() {
   const [venue, setVenue] = useState('Main Sports Hall');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [isSubmittingQuestionnaire, setIsSubmittingQuestionnaire] = useState(false);
+
+  // Standard Templates States & Handlers
+  const [vaultTab, setVaultTab] = useState<'explorer' | 'templates' | 'policies' | 'departmental'>(initialTab || 'explorer');
+
+  useEffect(() => {
+    if (initialTab) {
+      setVaultTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const [standardTemplates, setStandardTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [uploadingTemplateId, setUploadingTemplateId] = useState<string | null>(null);
+  const templateFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Policy & Framework Library States & Handlers
+  const [policyDocuments, setPolicyDocuments] = useState<any[]>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+  const [uploadingPolicyId, setUploadingPolicyId] = useState<string | null>(null);
+  const policyFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Departmental Guidelines States & Handlers
+  const [departmentGuidelines, setDepartmentGuidelines] = useState<any[]>([]);
+  const [loadingDeptGuidelines, setLoadingDeptGuidelines] = useState(false);
+  const [uploadingDeptId, setUploadingDeptId] = useState<string | null>(null);
+  const deptFileInputRef = useRef<HTMLInputElement>(null);
+
+  const STANDARD_TEMPLATES_LIST = [
+    { id: 'study-guide', name: 'Study Guide Template', desc: 'Official template for structuring academic study guides.' },
+    { id: 'exam-paper', name: 'Exam Paper Template', desc: 'Secure institutional layout for summative examination papers.' },
+    { id: 'assessment-brief', name: 'Assessment Brief Template', desc: 'Required format for describing assignments and projects.' },
+    { id: 'marking-rubric', name: 'Marking Rubric Template', desc: 'Standard grading criteria and rubric grid.' },
+    { id: 'internal-mod', name: 'Internal Moderation Report Template', desc: 'Quality assurance checklist for peer/departmental moderation.' },
+    { id: 'external-mod', name: 'External Moderation Report Template', desc: 'Regulatory review report format for exit-level modules.' },
+    { id: 'ai-reporting', name: 'AI Reporting Template', desc: 'Standard format for reporting automated compliance & generative checks.' },
+  ];
+
+  const POLICY_CATEGORIES_LIST = [
+    { id: 'teaching-learning', name: 'Teaching & Learning Policy', icon: BookOpen, desc: 'Institution-wide rules, pedagogical standards, and expectations for course delivery and teaching.' },
+    { id: 'quality-assurance', name: 'Quality Assurance Framework (CQPA Process)', icon: ShieldCheck, desc: 'Detailed workflow, checks, audit trails, and review processes managed by CQPA/QPO.' },
+    { id: 'assessment-guidelines', name: 'Assessment Guidelines', icon: FileText, desc: 'Comprehensive guide on designing assignments, exams, weightings, and regulatory criteria.' },
+    { id: 'moderation-guidelines', name: 'Moderation Guidelines', icon: FileSpreadsheet, desc: 'Official procedures for internal and external moderation of question papers, marking rubrics, and scripts.' },
+    { id: 'other-guidelines', name: 'Other Institutional Guidelines', icon: Library, desc: 'General institutional policies, regulatory bodies guidelines, or general compliance directives.' }
+  ];
+
+  useEffect(() => {
+    setLoadingTemplates(true);
+    const unsub = subscribeToStandardTemplates((data) => {
+      setStandardTemplates(data || []);
+      setLoadingTemplates(false);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    setLoadingPolicies(true);
+    const unsub = subscribeToPolicyDocuments((data) => {
+      setPolicyDocuments(data || []);
+      setLoadingPolicies(false);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    setLoadingDeptGuidelines(true);
+    const unsub = subscribeToDepartmentGuidelines((data) => {
+      setDepartmentGuidelines(data || []);
+      setLoadingDeptGuidelines(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleTemplateUpload = async (templateId: string, file: File) => {
+    try {
+      const templateItem = STANDARD_TEMPLATES_LIST.find(t => t.id === templateId);
+      if (!templateItem) return;
+
+      const sizeStr = `${(file.size / 1024).toFixed(1)} KB`;
+      await uploadStandardTemplate(templateId, {
+        templateType: templateItem.name,
+        fileName: file.name,
+        fileSize: sizeStr,
+        updatedBy: profile?.displayName || 'QPO Officer'
+      });
+
+      // Notify: all HODs, all Programme Coordinators, and all Lecturers across the institution
+      await addNotification({
+        title: `[Template Library] ${templateItem.name} Updated`,
+        message: `Quality Promotion Office (QPO) has uploaded/replaced the official standard template for ${templateItem.name}. File: ${file.name} (${sizeStr})`,
+        type: 'COMPLIANCE',
+        status: 'UNREAD',
+        moduleCode: 'GENERAL',
+        escalationTier: null,
+        userId: profile?.uid || 'system',
+        targetRoles: ['HOD', 'PROGRAMME_COORDINATOR', 'LECTURER', 'Lecturer', 'Programme Coordinator'],
+        targetDepartmentId: 'ALL',
+        fileName: file.name,
+        fileSize: sizeStr,
+        documentId: templateId,
+        documentType: 'template',
+        documentName: templateItem.name,
+        updatedBy: profile?.displayName || 'QPO Officer',
+        role: 'QPO'
+      });
+
+      setSuccessToast(`Successfully uploaded ${templateItem.name}!`);
+    } catch (err) {
+      console.error(err);
+      setSuccessToast("Error uploading standard template.");
+    }
+    setTimeout(() => setSuccessToast(null), 3500);
+  };
+
+  const handleTemplateDelete = async (templateId: string) => {
+    try {
+      const templateItem = STANDARD_TEMPLATES_LIST.find(t => t.id === templateId);
+      await deleteStandardTemplate(templateId);
+      setSuccessToast(`Removed standard template for ${templateItem?.name || templateId}`);
+    } catch (err) {
+      console.error(err);
+      setSuccessToast("Error removing standard template.");
+    }
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
+
+  const handlePolicyUpload = async (policyId: string, file: File) => {
+    try {
+      const policyItem = POLICY_CATEGORIES_LIST.find(p => p.id === policyId);
+      if (!policyItem) return;
+
+      const sizeStr = `${(file.size / 1024).toFixed(1)} KB`;
+      await uploadPolicyDocument(policyId, {
+        policyName: policyItem.name,
+        fileName: file.name,
+        fileSize: sizeStr,
+        updatedBy: profile?.displayName || 'QPO Officer'
+      });
+
+      // Notify: all HODs, all Programme Coordinators, and all Lecturers across the institution
+      await addNotification({
+        title: `[Policy Library] ${policyItem.name} Updated`,
+        message: `Quality Promotion Office (QPO) has published/replaced the official institutional policy: ${policyItem.name}. File: ${file.name} (${sizeStr})`,
+        type: 'COMPLIANCE',
+        status: 'UNREAD',
+        moduleCode: 'GENERAL',
+        escalationTier: null,
+        userId: profile?.uid || 'system',
+        targetRoles: ['HOD', 'PROGRAMME_COORDINATOR', 'LECTURER', 'Lecturer', 'Programme Coordinator'],
+        targetDepartmentId: 'ALL',
+        fileName: file.name,
+        fileSize: sizeStr,
+        documentId: policyId,
+        documentType: 'policy',
+        documentName: policyItem.name,
+        updatedBy: profile?.displayName || 'QPO Officer',
+        role: 'QPO'
+      });
+
+      setSuccessToast(`Successfully uploaded ${policyItem.name}!`);
+    } catch (err) {
+      console.error(err);
+      setSuccessToast("Error uploading policy document.");
+    }
+    setTimeout(() => setSuccessToast(null), 3500);
+  };
+
+  const handlePolicyDelete = async (policyId: string) => {
+    try {
+      const policyItem = POLICY_CATEGORIES_LIST.find(p => p.id === policyId);
+      await deletePolicyDocument(policyId);
+      setSuccessToast(`Removed policy document for ${policyItem?.name || policyId}`);
+    } catch (err) {
+      console.error(err);
+      setSuccessToast("Error removing policy document.");
+    }
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
+
+  const handleDeptGuidelinesUpload = async (deptId: string, file: File) => {
+    try {
+      const deptItem = DEPARTMENTS.find(d => d.id === deptId);
+      if (!deptItem) return;
+
+      const sizeStr = `${(file.size / 1024).toFixed(1)} KB`;
+      await uploadDepartmentGuidelines(deptId, {
+        departmentName: deptItem.name,
+        departmentCode: deptItem.code,
+        fileName: file.name,
+        fileSize: sizeStr,
+        updatedBy: profile?.displayName || 'HOD',
+        updatedByEmail: profile?.email || ''
+      });
+
+      // Notify: only the Programme Coordinators and Lecturers within that same department
+      await addNotification({
+        title: `[Department Guidelines] ${deptItem.name} Guidelines Updated`,
+        message: `The Head of Department (${profile?.displayName || 'HOD'}) has updated the departmental guidelines for ${deptItem.name}. File: ${file.name} (${sizeStr})`,
+        type: 'COMPLIANCE',
+        status: 'UNREAD',
+        moduleCode: deptItem.code || 'GENERAL',
+        escalationTier: null,
+        userId: profile?.uid || 'system',
+        targetRoles: ['PROGRAMME_COORDINATOR', 'LECTURER', 'Lecturer', 'Programme Coordinator'],
+        targetDepartmentId: deptId,
+        fileName: file.name,
+        fileSize: sizeStr,
+        documentId: deptId,
+        documentType: 'guideline',
+        documentName: `${deptItem.name} Teaching, Learning & Assessment Guidelines`,
+        updatedBy: profile?.displayName || 'HOD',
+        role: 'HOD',
+        departmentName: deptItem.name
+      });
+
+      setSuccessToast(`Successfully uploaded guidelines for ${deptItem.name}!`);
+    } catch (err) {
+      console.error(err);
+      setSuccessToast("Error uploading department guidelines.");
+    }
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
+
+  const handleDeptGuidelinesDelete = async (deptId: string) => {
+    try {
+      const deptItem = DEPARTMENTS.find(d => d.id === deptId);
+      await deleteDepartmentGuidelines(deptId);
+      setSuccessToast(`Successfully removed guidelines for ${deptItem?.name || deptId}`);
+    } catch (err) {
+      console.error(err);
+      setSuccessToast("Error deleting guidelines.");
+    }
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
 
   // STATEFUL FILE LIST FALLBACKS
   const [files, setFiles] = useState<VaultFile[]>([
@@ -423,36 +689,99 @@ export default function FileVault() {
             className="fixed top-6 right-6 z-50 p-4 bg-emerald-950/90 border border-emerald-500/30 rounded-2xl shadow-xl flex items-center gap-3 backdrop-blur-md max-w-md"
           >
             <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-            <p className="text-white text-xs font-semibold leading-relaxed">{successToast}</p>
+            <p className="text-foreground text-xs font-semibold leading-relaxed">{successToast}</p>
           </motion.div>
         )}
       </AnimatePresence>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">Secure <span className="text-indigo-500">File Vault</span></h2>
-          <p className="text-slate-500 font-medium mt-2">Enterprise-grade document topology with automated retention.</p>
+          <h2 className="text-4xl font-black text-foreground tracking-tighter">Secure <span className="text-indigo-500">File Vault</span></h2>
+          <p className="text-subtle-foreground font-medium mt-2">Enterprise-grade document topology with automated retention.</p>
         </div>
         <div className="flex gap-3">
-          <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          <div className="px-4 py-2 bg-surface-tint border border-border rounded-xl flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
             <Shield className="w-3 h-3 text-emerald-500" /> AES-256 Encrypted
           </div>
-          <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          <div className="px-4 py-2 bg-surface-tint border border-border rounded-xl flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
             <Clock className="w-3 h-3 text-amber-500" /> 3Y Retention Active
           </div>
         </div>
       </div>
 
-      {/* Module Selector Dropdown */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/20 rounded-3xl border border-indigo-500/10 shadow-lg relative overflow-hidden">
+      {/* Tab Switcher */}
+      <div className="flex border-b border-border gap-2">
+        <button
+          onClick={() => setVaultTab('explorer')}
+          className={cn(
+            "px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2",
+            vaultTab === 'explorer' 
+              ? "border-indigo-500 text-foreground bg-surface-tint rounded-t-xl" 
+              : "border-transparent text-subtle-foreground hover:text-foreground"
+          )}
+        >
+          <Folder className="w-4 h-4 text-indigo-400" />
+          Academic Explorer
+        </button>
+        <button
+          onClick={() => setVaultTab('templates')}
+          className={cn(
+            "px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2",
+            vaultTab === 'templates' 
+              ? "border-indigo-500 text-foreground bg-surface-tint rounded-t-xl" 
+              : "border-transparent text-subtle-foreground hover:text-foreground"
+          )}
+        >
+          <Library className="w-4 h-4 text-indigo-400" />
+          Template Library
+          <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full font-bold">
+            7 Official
+          </span>
+        </button>
+        <button
+          onClick={() => setVaultTab('policies')}
+          className={cn(
+            "px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2",
+            vaultTab === 'policies' 
+              ? "border-indigo-500 text-foreground bg-surface-tint rounded-t-xl" 
+              : "border-transparent text-subtle-foreground hover:text-foreground"
+          )}
+        >
+          <Scale className="w-4 h-4 text-indigo-400" />
+          Policy & Framework Library
+          <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full font-bold">
+            Governance
+          </span>
+        </button>
+        <button
+          onClick={() => setVaultTab('departmental')}
+          className={cn(
+            "px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2",
+            vaultTab === 'departmental' 
+              ? "border-indigo-500 text-foreground bg-surface-tint rounded-t-xl" 
+              : "border-transparent text-subtle-foreground hover:text-foreground"
+          )}
+        >
+          <BookOpen className="w-4 h-4 text-indigo-400" />
+          Department Guidelines
+          <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full font-bold">
+            Department
+          </span>
+        </button>
+      </div>
+
+      {vaultTab === 'explorer' && (
+        <>
+          {/* Module Selector Dropdown */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-surface via-surface to-indigo-950/20 rounded-3xl border border-indigo-500/10 shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 h-full w-32 bg-indigo-500/5 blur-[40px] rounded-full pointer-events-none" />
         <div className="space-y-1 relative z-10">
           <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">Active Module Folder</span>
-          <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-2">
+          <h3 className="text-sm font-black text-foreground tracking-tight flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-indigo-400" />
             Switch Active Folder Pathway
           </h3>
-          <p className="text-[10px] text-slate-500 font-bold">Instantly switch folders to view, upload, and process files for a different course.</p>
+          <p className="text-[10px] text-subtle-foreground font-bold">Instantly switch folders to view, upload, and process files for a different course.</p>
         </div>
         <div className="relative z-10 shrink-0 min-w-[240px]">
           <select
@@ -462,7 +791,7 @@ export default function FileVault() {
               // Set currentPath to match
               setCurrentPath(['Vault', 'Science', 'CS', 'BSc_CS', code, '2026', 'S1']);
             }}
-            className="w-full bg-slate-950/80 border border-white/10 text-white text-xs font-extrabold rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 hover:border-indigo-500/40 transition cursor-pointer"
+            className="w-full bg-surface-sunken border border-border text-foreground text-xs font-extrabold rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 hover:border-indigo-500/40 transition cursor-pointer"
           >
             {dbModules.map((m) => (
               <option key={m.id} value={m.code}>
@@ -474,14 +803,14 @@ export default function FileVault() {
       </div>
 
       {/* Breadcrumbs */}
-      <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white/5 p-4 rounded-2xl border border-white/10">
+      <div className="flex items-center gap-2 text-xs font-bold text-subtle-foreground bg-surface-tint p-4 rounded-2xl border border-border">
         {currentPath.map((item, i) => (
           <React.Fragment key={i}>
             <span 
               onClick={() => setCurrentPath(prev => prev.slice(0, i + 1))}
               className={cn(
-                "hover:text-white cursor-pointer transition-colors px-2 py-1 rounded-md",
-                i === currentPath.length - 1 && "bg-white/10 text-white"
+                "hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded-md",
+                i === currentPath.length - 1 && "bg-surface-tint-strong text-foreground"
               )}
             >
               {item}
@@ -496,7 +825,7 @@ export default function FileVault() {
         {/* Category Sidebar */}
         <div className="lg:col-span-3 space-y-4">
           <div className="flex justify-between items-center px-2">
-            <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">Topology Categories</h3>
+            <h3 className="text-[10px] font-black text-subtle-foreground uppercase tracking-[0.2em]">Topology Categories</h3>
             {selectedCategory && (
               <button 
                 onClick={() => setSelectedCategory(null)}
@@ -514,7 +843,7 @@ export default function FileVault() {
                 "w-full text-left p-4 rounded-2xl border transition-all group relative overflow-hidden",
                 selectedCategory === cat.id 
                   ? "bg-indigo-600/10 border-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.1)]" 
-                  : "bg-white/5 border-white/10 hover:border-white/20"
+                  : "bg-surface-tint border-border hover:border-foreground/20"
               )}
             >
               <div className="flex items-start gap-4 relative z-10">
@@ -523,14 +852,14 @@ export default function FileVault() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-black text-white tracking-tight">{cat.label}</p>
+                    <p className="text-sm font-black text-foreground tracking-tight">{cat.label}</p>
                     {files.filter(f => f.category === cat.id).length > 0 && (
-                      <span className="text-[9px] bg-slate-800 text-slate-400 font-bold px-1.5 py-0.5 rounded-full">
+                      <span className="text-[9px] bg-surface-2 text-muted-foreground font-bold px-1.5 py-0.5 rounded-full">
                         {files.filter(f => f.category === cat.id).length}
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-500 font-bold leading-relaxed mt-1">{cat.description}</p>
+                  <p className="text-[10px] text-subtle-foreground font-bold leading-relaxed mt-1">{cat.description}</p>
                 </div>
               </div>
             </button>
@@ -543,13 +872,13 @@ export default function FileVault() {
           {/* Action Bar */}
           <div className="glass-card p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
               <input 
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search within this directory..." 
-                className="w-full bg-transparent pl-12 pr-4 text-sm text-white font-semibold placeholder:text-slate-600 focus:outline-none"
+                className="w-full bg-transparent pl-12 pr-4 text-sm text-foreground font-semibold placeholder:text-subtle-foreground focus:outline-none"
               />
             </div>
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
@@ -561,7 +890,7 @@ export default function FileVault() {
               {canUpload && (
                 <button 
                   onClick={openUploadModal}
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/20 active:scale-95 cursor-pointer"
                   id="btn-upload-file-vault"
                 >
                   <Upload className="w-3.5 h-3.5" /> Upload Document
@@ -573,13 +902,13 @@ export default function FileVault() {
                     setAssignToast("Assigned Metadata Policy successfully!");
                     setTimeout(() => setAssignToast(null), 3000);
                   }}
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-amber-600/20 active:scale-95 animate-pulse"
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-amber-600/20 active:scale-95 animate-pulse"
                 >
                   <Folder className="w-3.5 h-3.5" /> Assign Document Policy
                 </button>
               )}
               {!canUpload && !canAssign && (
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4 text-center">View-Only Directory Access</span>
+                <span className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest px-4 text-center">View-Only Directory Access</span>
               )}
             </div>
           </div>
@@ -605,7 +934,7 @@ export default function FileVault() {
 
             return (
               <div className="space-y-6">
-                <div className="glass-card p-6 border border-white/10 bg-slate-900 rounded-3xl relative overflow-hidden shadow-xl">
+                <div className="glass-card p-6 border border-border bg-surface rounded-3xl relative overflow-hidden shadow-xl">
                   {/* Background ambient light */}
                   <div className={cn(
                     "absolute -right-20 -top-20 w-44 h-44 rounded-full blur-[80px] opacity-10 pointer-events-none",
@@ -615,7 +944,7 @@ export default function FileVault() {
                   <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6 relative z-10">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] bg-slate-800 text-slate-300 font-black tracking-widest px-2.5 py-1 rounded-md uppercase border border-white/5">
+                        <span className="text-[10px] bg-surface-2 text-foreground/80 font-black tracking-widest px-2.5 py-1 rounded-md uppercase border border-border-subtle">
                           Module Audit State
                         </span>
                         {isExitLevelActive ? (
@@ -629,12 +958,12 @@ export default function FileVault() {
                         )}
                       </div>
                       
-                      <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-2.5">
+                      <h3 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2.5">
                         <Folder className="w-5 h-5 text-indigo-400" />
                         {activeModuleCode} • {activeModuleInDb?.name || 'Introductory Course'}
                       </h3>
                       
-                      <p className="text-slate-400 text-xs font-semibold max-w-md leading-relaxed">
+                      <p className="text-muted-foreground text-xs font-semibold max-w-md leading-relaxed">
                         Assessing quality reports required under national regulatory frameworks.
                         {isExitLevelActive 
                           ? " As an exit-level module, both internal and external moderation files are legally required." 
@@ -642,9 +971,9 @@ export default function FileVault() {
                       </p>
 
                       {/* Manual Exit Level setting for HOD */}
-                      <div className="flex items-center gap-3 pt-2 text-slate-400 text-xs font-semibold" id="module-exit-level-toggle-container">
+                      <div className="flex items-center gap-3 pt-2 text-muted-foreground text-xs font-semibold" id="module-exit-level-toggle-container">
                         <span>Exit Level Status:</span>
-                        <div className="flex items-center gap-1.5 bg-slate-950 border border-white/10 px-2 py-1 rounded-xl">
+                        <div className="flex items-center gap-1.5 bg-background border border-border px-2 py-1 rounded-xl">
                           <button
                             type="button"
                             disabled={profile?.role !== 'HOD'}
@@ -657,7 +986,7 @@ export default function FileVault() {
                               "text-[9px] px-2.5 py-1 font-black uppercase tracking-wider rounded-lg transition active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
                               isExitLevelActive 
                                 ? "bg-amber-500 text-slate-950" 
-                                : "text-slate-400 hover:text-white"
+                                : "text-muted-foreground hover:text-foreground"
                             )}
                             id="btn-module-set-exit-yes"
                           >
@@ -675,7 +1004,7 @@ export default function FileVault() {
                               "text-[9px] px-2.5 py-1 font-black uppercase tracking-wider rounded-lg transition active:scale-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
                               !isExitLevelActive 
                                 ? "bg-sky-500 text-slate-950" 
-                                : "text-slate-400 hover:text-white"
+                                : "text-muted-foreground hover:text-foreground"
                             )}
                             id="btn-module-set-exit-no"
                           >
@@ -683,7 +1012,7 @@ export default function FileVault() {
                           </button>
                         </div>
                         {profile?.role !== 'HOD' ? (
-                          <span className="text-[9px] text-slate-500 font-normal italic">(HOD only)</span>
+                          <span className="text-[9px] text-subtle-foreground font-normal italic">(HOD only)</span>
                         ) : (
                           <span className="text-[9px] text-indigo-400 font-semibold">(HOD Adjust Setting)</span>
                         )}
@@ -692,12 +1021,12 @@ export default function FileVault() {
 
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-5 shrink-0">
                       {/* The Reports Requirement List */}
-                      <div className="space-y-3 bg-white/[0.02] border border-white/5 p-4 rounded-2xl min-w-[260px]">
-                        <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Moderation Checklist</h4>
+                      <div className="space-y-3 bg-foreground/[0.02] border border-border-subtle p-4 rounded-2xl min-w-[260px]">
+                        <h4 className="text-[9px] font-black text-subtle-foreground uppercase tracking-widest leading-none mb-1">Moderation Checklist</h4>
                         
                         {/* Internal check */}
                         <div className="flex items-center justify-between gap-3 text-xs font-bold">
-                          <span className="text-slate-300">Internal Moderation File</span>
+                          <span className="text-foreground/80">Internal Moderation File</span>
                           {hasInternalReport ? (
                             <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 text-[9px] px-1.5 py-0.5 rounded uppercase font-black">
                               ✓ Uploaded
@@ -711,9 +1040,9 @@ export default function FileVault() {
 
                         {/* External check */}
                         <div className="flex items-center justify-between gap-3 text-xs font-bold">
-                          <span className="text-slate-300">External Moderation File</span>
+                          <span className="text-foreground/80">External Moderation File</span>
                           {!isExitLevelActive ? (
-                            <span className="text-slate-500 bg-white/5 border border-white/5 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">
+                            <span className="text-subtle-foreground bg-surface-tint border border-border-subtle text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">
                               Not Required
                             </span>
                           ) : hasExternalReport ? (
@@ -738,14 +1067,14 @@ export default function FileVault() {
                         {isModerationFullyCompliant ? (
                           <>
                             <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-1.5" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Compliant</span>
-                            <span className="text-[8px] text-slate-400 font-extrabold uppercase mt-0.5 tracking-wider">All Reports Received</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Compliant</span>
+                            <span className="text-[8px] text-muted-foreground font-extrabold uppercase mt-0.5 tracking-wider">All Reports Received</span>
                           </>
                         ) : (
                           <>
                             <AlertCircle className="w-8 h-8 text-amber-500 mb-1.5 shrink-0" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Reports Pending</span>
-                            <span className="text-[8px] text-slate-400 font-extrabold uppercase mt-0.5 tracking-wider">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-foreground">Reports Pending</span>
+                            <span className="text-[8px] text-muted-foreground font-extrabold uppercase mt-0.5 tracking-wider">
                               {isExitLevelActive && !hasExternalReport && !hasInternalReport ? "2 Files Missing" : "1 File Missing"}
                             </span>
                           </>
@@ -763,7 +1092,7 @@ export default function FileVault() {
                       ? "bg-emerald-500/5 border-emerald-500/20 shadow-md" 
                       : isModerationFullyCompliant 
                         ? "bg-indigo-600/10 border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.1)]" 
-                        : "bg-slate-800/40 border-white/5 opacity-80"
+                        : "bg-surface-sunken border-border-subtle opacity-80"
                   )}>
                     <div className="flex items-start gap-4 flex-1">
                       <div className={cn(
@@ -772,20 +1101,20 @@ export default function FileVault() {
                           ? "bg-emerald-500/10 text-emerald-400" 
                           : isModerationFullyCompliant 
                             ? "bg-indigo-500/10 text-indigo-400" 
-                            : "bg-slate-850 text-slate-600"
+                            : "bg-surface-2 text-subtle-foreground"
                       )}>
                         <FileText className="w-6 h-6" />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 block">Exam Ingestion Dispatch Workflow</span>
-                        <h4 className="text-sm font-black text-white tracking-tight">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-subtle-foreground block">Exam Ingestion Dispatch Workflow</span>
+                        <h4 className="text-sm font-black text-foreground tracking-tight">
                           {isQuestionnaireCompleted 
                             ? "Institutional Cover Page Generated & Attached ✓" 
                             : isModerationFullyCompliant 
                               ? "Moderation Requirements Satisfied: Cover Page Questionnaire Pending" 
                               : "Awaiting Moderation Report Uploads"}
                         </h4>
-                        <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                        <p className="text-[11px] text-muted-foreground font-medium leading-relaxed">
                           {isQuestionnaireCompleted 
                             ? `Cover page compiled by ${examPaperFile.questionnaire?.examinerName || 'Lecturer'}. Attached & released to the secure Exam Vault.`
                             : isModerationFullyCompliant 
@@ -809,7 +1138,7 @@ export default function FileVault() {
                             setSpecialInstructions(examPaperFile.questionnaire?.specialInstructions || '');
                             setIsPreviewingFrontPage(true);
                           }}
-                          className="w-full sm:w-auto px-5 py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition cursor-pointer"
+                          className="w-full sm:w-auto px-5 py-2.5 bg-surface-tint border border-border text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-surface-tint-strong transition cursor-pointer"
                         >
                           View Front Cover
                         </button>
@@ -826,14 +1155,14 @@ export default function FileVault() {
                             setSpecialInstructions('1. Answer all questions.\n2. No calculators permitted.\n3. Show all working.');
                             setIsQuestionnaireOpen(true);
                           }}
-                          className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/30 active:scale-95 cursor-pointer"
+                          className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/30 active:scale-95 cursor-pointer"
                         >
                           Complete Cover Sheet
                         </button>
                       ) : (
                         <button 
                           disabled
-                          className="w-full sm:w-auto px-6 py-2.5 bg-slate-850 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed border border-white/5"
+                          className="w-full sm:w-auto px-6 py-2.5 bg-surface-2 text-subtle-foreground rounded-xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed border border-border-subtle"
                         >
                           Locked (Pending Reports)
                         </button>
@@ -849,35 +1178,100 @@ export default function FileVault() {
           <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-4">
             <Shield className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <h5 className="text-white text-xs font-black uppercase tracking-wider">Exam Upload Regulatory Ingestion Protocol</h5>
-              <p className="text-slate-400 text-[11px] font-medium leading-relaxed">
+              <h5 className="text-foreground text-xs font-black uppercase tracking-wider">Exam Upload Regulatory Ingestion Protocol</h5>
+              <p className="text-muted-foreground text-[11px] font-medium leading-relaxed">
                 All exam-related materials (category <strong className="text-indigo-400">Assessments</strong>) uploaded to the Secure Vault are strictly restricted to **PDF format**. Furthermore, the documents must **NOT contain any front templates or cover/title pages** (preventing administrative identity exposures). VaultIQ automated parsers run instant heuristic alignments on upload.
               </p>
             </div>
           </div>
 
+          {/* Official Reference Templates Quick Access Bar */}
+          <div className="p-5 bg-indigo-950/20 border border-indigo-500/10 rounded-2xl space-y-3 relative overflow-hidden">
+            <div className="absolute right-0 top-0 h-full w-24 bg-indigo-500/5 blur-[30px] rounded-full pointer-events-none" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
+              <div className="space-y-1">
+                <h5 className="text-foreground text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <Library className="w-4 h-4 text-indigo-400" />
+                  Official Reference Templates Quick Download
+                </h5>
+                <p className="text-muted-foreground text-[11px] font-medium">
+                  Lecturers and moderators must use standard formats when drafting study guides, exams, assessments, or moderation reviews.
+                </p>
+              </div>
+              <button
+                onClick={() => setVaultTab('templates')}
+                className="text-[10px] bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-indigo-500/20 self-start sm:self-center shrink-0 transition"
+              >
+                Go to Library
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+              {[
+                { id: 'study-guide', name: 'Study Guide Template' },
+                { id: 'exam-paper', name: 'Exam Paper Template' },
+                { id: 'assessment-brief', name: 'Assessment Brief Template' },
+                { id: 'internal-mod', name: 'Internal Moderation Template' },
+              ].map((temp) => {
+                const uploaded = standardTemplates.find(t => t.id === temp.id);
+                return (
+                  <div
+                    key={temp.id}
+                    className={cn(
+                      "p-3 rounded-xl border flex items-center justify-between gap-2 text-xs",
+                      uploaded
+                        ? "bg-surface-tint border-border text-foreground/80"
+                        : "bg-surface-sunken border-border-subtle text-subtle-foreground"
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <p className="font-bold truncate text-[11px]">{temp.name}</p>
+                      <p className="text-[9px] text-subtle-foreground mt-0.5 uppercase tracking-wide">
+                        {uploaded ? uploaded.fileSize : "Not Available"}
+                      </p>
+                    </div>
+                    {uploaded ? (
+                      <button
+                        onClick={() => {
+                          setSuccessToast(`Downloading template: ${uploaded.fileName}...`);
+                          setTimeout(() => setSuccessToast(null), 3000);
+                        }}
+                        className="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition"
+                        title="Download template"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <span className="text-[8px] text-subtle-foreground font-extrabold uppercase shrink-0">N/A</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* File List / Content */}
           <div className="glass-card overflow-hidden">
-            <div className="px-8 py-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
-              <div className="flex items-center gap-3 text-slate-400">
+            <div className="px-8 py-6 border-b border-border-subtle bg-foreground/[0.02] flex justify-between items-center">
+              <div className="flex items-center gap-3 text-muted-foreground">
                 <Folder className="w-5 h-5 text-indigo-400" />
-                <span className="text-sm font-black text-white tracking-tight">
+                <span className="text-sm font-black text-foreground tracking-tight">
                   {selectedCategory ? `${selectedCategory} Archive` : 'Full Academic Archive'}
                 </span>
               </div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">
+              <span className="text-[10px] font-bold text-subtle-foreground uppercase">
                 Showing {filteredFiles.length} file{filteredFiles.length !== 1 && 's'}
               </span>
             </div>
 
             <div className="divide-y divide-white/5">
               {filteredFiles.length === 0 ? (
-                <div className="p-20 flex flex-col items-center justify-center text-center bg-white/[0.01]">
+                <div className="p-20 flex flex-col items-center justify-center text-center bg-foreground/[0.01]">
                   <div className="w-16 h-16 bg-slate-500/5 rounded-full flex items-center justify-center mb-4">
                     <File className="w-7 h-7 text-slate-500/35" />
                   </div>
-                  <h4 className="text-slate-300 font-extrabold text-base tracking-tight">No documents archived here</h4>
-                  <p className="text-slate-500 text-xs font-medium mt-1.5 max-w-sm">
+                  <h4 className="text-foreground/80 font-extrabold text-base tracking-tight">No documents archived here</h4>
+                  <p className="text-subtle-foreground text-xs font-medium mt-1.5 max-w-sm">
                     {searchQuery ? 'Try adjusting your search query, or clear the search criteria.' : 'Create a clean template upload to populate files under this partition.'}
                   </p>
                   {canUpload && (
@@ -891,14 +1285,14 @@ export default function FileVault() {
                 </div>
               ) : (
                 filteredFiles.map((file, i) => (
-                  <div key={file.id} className="flex items-center justify-between p-6 hover:bg-white/[0.03] transition-colors group">
+                  <div key={file.id} className="flex items-center justify-between p-6 hover:bg-foreground/[0.03] transition-colors group">
                     <div className="flex items-center gap-6">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-indigo-600/20 group-hover:border-indigo-500/50 transition-all shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-surface-tint border border-border flex items-center justify-center group-hover:bg-indigo-600/20 group-hover:border-indigo-500/50 transition-all shrink-0">
                         <File className="w-6 h-6 text-indigo-400" />
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-black text-white tracking-tight">{file.name}</p>
+                          <p className="text-sm font-black text-foreground tracking-tight">{file.name}</p>
                           {i === 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase border border-emerald-500/20">Active</span>}
                           {file.isExamRelated && (
                             <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[8px] font-black uppercase border border-amber-500/20">
@@ -907,32 +1301,32 @@ export default function FileVault() {
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2">
-                          <span className="text-[10px] items-center flex gap-1 text-slate-500 font-bold uppercase tracking-wider">
+                          <span className="text-[10px] items-center flex gap-1 text-subtle-foreground font-bold uppercase tracking-wider">
                             <Clock className="w-3 h-3" /> {file.uploadedAt}
                           </span>
-                          <span className="text-[10px] items-center flex gap-1 text-slate-500 font-bold uppercase tracking-wider">
+                          <span className="text-[10px] items-center flex gap-1 text-subtle-foreground font-bold uppercase tracking-wider">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> {file.size}
                           </span>
-                          <span className="text-[10px] items-center flex gap-1 text-slate-500 font-bold uppercase tracking-wider">
-                            Owner: <strong className="text-slate-400">{file.uploadedBy}</strong>
+                          <span className="text-[10px] items-center flex gap-1 text-subtle-foreground font-bold uppercase tracking-wider">
+                            Owner: <strong className="text-muted-foreground">{file.uploadedBy}</strong>
                           </span>
-                          <span className="text-[10px] bg-white/5 text-slate-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wide">
+                          <span className="text-[10px] bg-surface-tint text-muted-foreground font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wide">
                             {file.category}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-2.5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition-colors" title="Download">
+                      <button className="p-2.5 hover:bg-surface-tint-strong rounded-xl text-muted-foreground hover:text-foreground transition-colors" title="Download">
                         <Download className="w-4 h-4" />
                       </button>
-                      <button className="p-2.5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition-colors" title="Archive">
+                      <button className="p-2.5 hover:bg-surface-tint-strong rounded-xl text-muted-foreground hover:text-foreground transition-colors" title="Archive">
                         <Archive className="w-4 h-4" />
                       </button>
                       {canUpload && (
                         <button 
                           onClick={() => deleteFile(file.id)}
-                          className="p-2.5 hover:bg-rose-500/10 rounded-xl text-slate-400 hover:text-rose-400 transition-colors" 
+                          className="p-2.5 hover:bg-rose-500/10 rounded-xl text-muted-foreground hover:text-rose-400 transition-colors" 
                           title="Delete"
                         >
                           <X className="w-4 h-4" />
@@ -945,12 +1339,12 @@ export default function FileVault() {
             </div>
 
             {/* Drag & Drop Hint Footer */}
-            <div className="p-12 border-t border-white/5 flex flex-col items-center justify-center text-center bg-white/[0.01]">
+            <div className="p-12 border-t border-border-subtle flex flex-col items-center justify-center text-center bg-foreground/[0.01]">
               <div className="w-14 h-14 bg-indigo-500/5 rounded-full flex items-center justify-center mb-4">
                 <Upload className="w-6 h-6 text-indigo-500/35" />
               </div>
-              <h4 className="text-slate-300 font-bold text-sm tracking-tight">Standard compliance-driven audit engine active</h4>
-              <p className="text-slate-500 text-xs mt-1.5 max-w-sm leading-relaxed">
+              <h4 className="text-foreground/80 font-bold text-sm tracking-tight">Standard compliance-driven audit engine active</h4>
+              <p className="text-subtle-foreground text-xs mt-1.5 max-w-sm leading-relaxed">
                 Files submitted will be auto-categorized, cryptographically validated and archived.
               </p>
             </div>
@@ -966,18 +1360,564 @@ export default function FileVault() {
                </p>
              </div>
           </div>
+          </div>
         </div>
-      </div>
+      </>
+    )}
+
+      {vaultTab === 'templates' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Header Banner */}
+          <div className="p-6 bg-gradient-to-r from-indigo-950/40 via-surface to-indigo-950/20 rounded-3xl border border-indigo-500/10 shadow-lg relative overflow-hidden">
+            <div className="absolute right-0 top-0 h-full w-48 bg-indigo-500/5 blur-[50px] rounded-full pointer-events-none" />
+            <div className="space-y-2 relative z-10">
+              <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-black tracking-widest px-2.5 py-1 rounded-md uppercase border border-indigo-500/20">
+                Institutional Quality Assurance
+              </span>
+              <h3 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2.5">
+                <Library className="text-indigo-400 w-5 h-5" />
+                Standard Institutional Template Library
+              </h3>
+              <p className="text-muted-foreground text-xs font-semibold max-w-2xl leading-relaxed">
+                Official institutional formats and report guides. Under Higher Education Quality guidelines, all departments must use these current templates. Only the Quality Promotion Office (QPO) can manage and replace these standard specifications.
+              </p>
+            </div>
+          </div>
+
+          {/* Guidelines info */}
+          <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex items-start gap-4">
+            <ShieldCheck className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h5 className="text-foreground text-xs font-black uppercase tracking-wider">File Vault Quick Access Protocol</h5>
+              <p className="text-muted-foreground text-[11px] font-medium leading-relaxed">
+                All templates listed below can be directly downloaded by any staff member. Lecturers and administrators must use these standard formats when preparing study guides, assessments, rubrics, and moderation reports.
+              </p>
+            </div>
+          </div>
+
+          {/* Templates Grid / List */}
+          <div className="glass-card overflow-hidden">
+            <div className="px-8 py-6 border-b border-border-subtle bg-foreground/[0.02] flex justify-between items-center">
+              <span className="text-sm font-black text-foreground tracking-tight uppercase">Mandatory Formats</span>
+              <span className="text-[10px] font-bold text-subtle-foreground uppercase">7 Registered Slots</span>
+            </div>
+
+            {/* Hidden Input for Template Uploading */}
+            <input 
+              type="file" 
+              ref={templateFileInputRef} 
+              className="hidden" 
+              accept=".pdf,.doc,.docx"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0] && uploadingTemplateId) {
+                  handleTemplateUpload(uploadingTemplateId, e.target.files[0]);
+                  setUploadingTemplateId(null);
+                }
+              }}
+            />
+
+            <div className="divide-y divide-white/5">
+              {STANDARD_TEMPLATES_LIST.map((temp) => {
+                const uploaded = standardTemplates.find(t => t.id === temp.id);
+                return (
+                  <div key={temp.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-foreground/[0.02] transition-colors group">
+                    <div className="flex items-start gap-5">
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center border transition-all shrink-0",
+                        uploaded 
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                          : "bg-slate-500/5 border-border-subtle text-subtle-foreground"
+                      )}>
+                        {uploaded ? <FileSpreadsheet className="w-6 h-6" /> : <FileUp className="w-6 h-6 opacity-40" />}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-black text-foreground tracking-tight">{temp.name}</h4>
+                          {uploaded ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase border border-emerald-500/20">
+                              Active Version
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-surface-2 text-subtle-foreground text-[8px] font-bold uppercase">
+                              No File Uploaded
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-subtle-foreground text-xs font-semibold leading-relaxed">{temp.desc}</p>
+                        
+                        {uploaded && (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                            <span className="flex items-center gap-1">
+                              <File className="w-3.5 h-3.5 text-indigo-400" /> {uploaded.fileName}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> Updated: {uploaded.updatedAt ? new Date(uploaded.updatedAt).toLocaleDateString('en-GB') + ' ' + new Date(uploaded.updatedAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}) : 'Recently'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              Size: {uploaded.fileSize}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              By: <strong className="text-foreground/80">{uploaded.updatedBy}</strong>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      {uploaded && (
+                        <button
+                          onClick={() => {
+                            setSuccessToast(`Downloading standard template: ${uploaded.fileName}...`);
+                            setTimeout(() => setSuccessToast(null), 3000);
+                          }}
+                          className="px-4 py-2 bg-surface-tint hover:bg-surface-tint-strong text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest border border-border transition-all flex items-center gap-1.5"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Download
+                        </button>
+                      )}
+
+                      {profile?.role === 'QPO' ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setUploadingTemplateId(temp.id);
+                              setTimeout(() => {
+                                templateFileInputRef.current?.click();
+                              }, 100);
+                            }}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5",
+                              uploaded
+                                ? "bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20"
+                                : "bg-indigo-600 hover:bg-indigo-500 text-foreground shadow-lg shadow-indigo-600/20"
+                            )}
+                          >
+                            {uploaded ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5" /> Replace
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" /> Upload File
+                              </>
+                            )}
+                          </button>
+                          
+                          {uploaded && (
+                            <button
+                              onClick={() => handleTemplateDelete(temp.id)}
+                              className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl transition-colors"
+                              title="Delete template version"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        !uploaded && (
+                          <span className="text-[10px] text-subtle-foreground font-bold italic">Awaiting QPO upload</span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {vaultTab === 'policies' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Header Banner */}
+          <div className="p-6 bg-gradient-to-r from-indigo-950/40 via-surface to-indigo-950/20 rounded-3xl border border-indigo-500/10 shadow-lg relative overflow-hidden">
+            <div className="absolute right-0 top-0 h-full w-48 bg-indigo-500/5 blur-[50px] rounded-full pointer-events-none" />
+            <div className="space-y-2 relative z-10">
+              <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-black tracking-widest px-2.5 py-1 rounded-md uppercase border border-indigo-500/20">
+                Institutional Governance
+              </span>
+              <h3 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2.5">
+                <Scale className="text-indigo-400 w-5 h-5" />
+                Policy & Framework Library
+              </h3>
+              <p className="text-muted-foreground text-xs font-semibold max-w-2xl leading-relaxed">
+                Official institution-wide governance documents, standards, guidelines, and compliance frameworks. These documents represent the formal regulations of the academic senate and quality promotion councils.
+              </p>
+            </div>
+          </div>
+
+          {/* Access Guidelines Card */}
+          <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-4">
+            <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h5 className="text-foreground text-xs font-black uppercase tracking-wider">Access Protocol Information</h5>
+              <p className="text-muted-foreground text-[11px] font-medium leading-relaxed">
+                {profile?.role === 'QPO' ? (
+                  <span className="text-emerald-400 font-bold">Authorized QPO Session:</span>
+                ) : (
+                  <span>General Access:</span>
+                )}{" "}
+                These documents apply institution-wide to all faculties and departments. Every role in the system can view and download them for regulatory compliance. Only the Quality Promotion Office (QPO) is authorized to upload, update, or remove these master policy records.
+              </p>
+            </div>
+          </div>
+
+          {/* Policy Ingestion / File Input */}
+          <input 
+            type="file" 
+            ref={policyFileInputRef} 
+            className="hidden" 
+            accept=".pdf,.doc,.docx"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0] && uploadingPolicyId) {
+                handlePolicyUpload(uploadingPolicyId, e.target.files[0]);
+                setUploadingPolicyId(null);
+              }
+            }}
+          />
+
+          {/* Policies Grid */}
+          <div className="glass-card overflow-hidden">
+            <div className="px-8 py-6 border-b border-border-subtle bg-foreground/[0.02] flex justify-between items-center">
+              <span className="text-sm font-black text-foreground tracking-tight uppercase">Master Policy Documents</span>
+              <span className="text-[10px] font-bold text-subtle-foreground uppercase">5 Core Governance Dimensions</span>
+            </div>
+
+            <div className="divide-y divide-white/5">
+              {POLICY_CATEGORIES_LIST.map((item) => {
+                const uploaded = policyDocuments.find(p => p.id === item.id);
+                const ItemIcon = item.icon;
+                return (
+                  <div key={item.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-foreground/[0.02] transition-colors group">
+                    <div className="flex items-start gap-5">
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center border transition-all shrink-0",
+                        uploaded 
+                          ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-400" 
+                          : "bg-slate-500/5 border-border-subtle text-subtle-foreground"
+                      )}>
+                        <ItemIcon className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-black text-foreground tracking-tight">{item.name}</h4>
+                          {uploaded ? (
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 text-[8px] font-black uppercase border border-indigo-500/20">
+                              Active Master Policy
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-surface-2 text-subtle-foreground text-[8px] font-bold uppercase">
+                              Document Missing (Awaiting Ingestion)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-subtle-foreground text-xs font-semibold leading-relaxed">{item.desc}</p>
+                        
+                        {uploaded && (
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                            <span className="flex items-center gap-1">
+                              <File className="w-3.5 h-3.5 text-indigo-400" /> {uploaded.fileName}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> Published: {uploaded.updatedAt ? (uploaded.updatedAt.toDate ? new Date(uploaded.updatedAt.toDate()).toLocaleDateString('en-GB') + ' ' + new Date(uploaded.updatedAt.toDate()).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}) : new Date(uploaded.updatedAt).toLocaleDateString('en-GB') + ' ' + new Date(uploaded.updatedAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})) : 'Recently'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              Size: {uploaded.fileSize}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              By: <strong className="text-foreground/80">{uploaded.updatedBy}</strong>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      {uploaded && (
+                        <button
+                          onClick={() => {
+                            setSuccessToast(`Downloading official policy: ${uploaded.fileName}...`);
+                            setTimeout(() => setSuccessToast(null), 3000);
+                          }}
+                          className="px-4 py-2 bg-surface-tint hover:bg-surface-tint-strong text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest border border-border transition-all flex items-center gap-1.5"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Download
+                        </button>
+                      )}
+
+                      {profile?.role === 'QPO' ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setUploadingPolicyId(item.id);
+                              setTimeout(() => {
+                                policyFileInputRef.current?.click();
+                              }, 100);
+                            }}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5",
+                              uploaded
+                                ? "bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20"
+                                : "bg-indigo-600 hover:bg-indigo-500 text-foreground shadow-lg shadow-indigo-600/20"
+                            )}
+                          >
+                            {uploaded ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5" /> Replace Record
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-3.5 h-3.5" /> Upload master
+                              </>
+                            )}
+                          </button>
+                          
+                          {uploaded && (
+                            <button
+                              onClick={() => handlePolicyDelete(item.id)}
+                              className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl transition-colors"
+                              title="Delete master record"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        !uploaded && (
+                          <span className="text-[10px] text-subtle-foreground font-bold italic">Awaiting upload by QPO</span>
+                        )
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {vaultTab === 'departmental' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* Header Banner */}
+          <div className="p-6 bg-gradient-to-r from-indigo-950/40 via-surface to-indigo-950/20 rounded-3xl border border-indigo-500/10 shadow-lg relative overflow-hidden">
+            <div className="absolute right-0 top-0 h-full w-48 bg-indigo-500/5 blur-[50px] rounded-full pointer-events-none" />
+            <div className="space-y-2 relative z-10">
+              <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-black tracking-widest px-2.5 py-1 rounded-md uppercase border border-indigo-500/20">
+                Departmental Governance
+              </span>
+              <h3 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2.5">
+                <BookOpen className="text-indigo-400 w-5 h-5" />
+                Department Guidelines Library
+              </h3>
+              <p className="text-muted-foreground text-xs font-semibold max-w-2xl leading-relaxed">
+                Specific academic, pedagogical, teaching, learning, and assessment guidelines customized per academic department.
+              </p>
+            </div>
+          </div>
+
+          {/* Access Guidelines Card */}
+          <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-4">
+            <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h5 className="text-foreground text-xs font-black uppercase tracking-wider">Access Protocol Information</h5>
+              <p className="text-muted-foreground text-[11px] font-medium leading-relaxed">
+                Everyone within an academic department can view and download their department's specific guidelines. High-level overseeing roles can view all departments' guidelines. Only the Head of Department (HOD) of that specific department is authorized to upload, update, or remove their department's guidelines.
+              </p>
+            </div>
+          </div>
+
+          {/* Department Guidelines Ingestion Input */}
+          <input 
+            type="file" 
+            ref={deptFileInputRef} 
+            className="hidden" 
+            accept=".pdf,.doc,.docx"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0] && uploadingDeptId) {
+                handleDeptGuidelinesUpload(uploadingDeptId, e.target.files[0]);
+                setUploadingDeptId(null);
+              }
+            }}
+          />
+
+          {/* Department Guidelines Grid */}
+          <div className="glass-card overflow-hidden">
+            <div className="px-8 py-6 border-b border-border-subtle bg-foreground/[0.02] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <span className="text-sm font-black text-foreground tracking-tight uppercase">Departmental Guidelines Registry</span>
+                <p className="text-[10px] font-bold text-subtle-foreground uppercase mt-0.5">Teaching, Learning, & Assessment guidelines</p>
+              </div>
+              
+              {/* If overseer, show search input */}
+              {['Deputy Dean', 'Executive Dean', 'DVC: T&L', 'QPO', 'CQPA', 'Auditor'].includes(mapUserRoleToRole(profile?.role || '')) && (
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
+                  <input 
+                    type="text" 
+                    placeholder="Search departments..." 
+                    className="w-full pl-9 pr-4 py-2 bg-surface-tint border border-border rounded-xl text-xs text-foreground uppercase focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-subtle-foreground"
+                    onChange={(e) => {
+                      (window as any).__deptSearch = e.target.value;
+                      // Force a re-render
+                      setSuccessToast(null);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="divide-y divide-white/5">
+              {(() => {
+                const userRole = mapUserRoleToRole(profile?.role || '');
+                const isOverseer = ['Deputy Dean', 'Executive Dean', 'DVC: T&L', 'QPO', 'CQPA', 'Auditor'].includes(userRole);
+                
+                let visibleDepts = DEPARTMENTS;
+                if (!isOverseer) {
+                  const userDeptId = profile?.departmentId;
+                  visibleDepts = DEPARTMENTS.filter(d => d.id === userDeptId);
+                }
+
+                // Apply search filter if active
+                const term = (window as any).__deptSearch || '';
+                if (term) {
+                  visibleDepts = visibleDepts.filter(d => 
+                    d.name.toLowerCase().includes(term.toLowerCase()) || 
+                    d.code.toLowerCase().includes(term.toLowerCase())
+                  );
+                }
+
+                if (visibleDepts.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-subtle-foreground text-xs font-bold uppercase">
+                      {isOverseer ? "No departments found matching your filter." : "No department assigned to your user profile. Please update your profile settings or contact your administrator."}
+                    </div>
+                  );
+                }
+
+                return visibleDepts.map((dept) => {
+                  const uploaded = departmentGuidelines.find(g => g.id === dept.id);
+                  return (
+                    <div key={dept.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-foreground/[0.02] transition-colors group">
+                      <div className="flex items-start gap-5">
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl flex items-center justify-center border transition-all shrink-0",
+                          uploaded 
+                            ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-400" 
+                            : "bg-slate-500/5 border-border-subtle text-subtle-foreground"
+                        )}>
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-sm font-black text-foreground tracking-tight">{dept.name}</h4>
+                            <span className="px-2 py-0.5 rounded bg-surface-tint text-[9px] font-black text-muted-foreground uppercase border border-border-subtle">
+                              {dept.code}
+                            </span>
+                            {uploaded ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase border border-emerald-500/20">
+                                Active Guidelines
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[8px] font-black uppercase border border-amber-500/20">
+                                Missing (Awaiting Upload)
+                              </span>
+                            )}
+                          </div>
+                          
+                          <p className="text-subtle-foreground text-[11px] font-semibold">
+                            Official Teaching, Learning, & Assessment guidelines for the {dept.name}.
+                          </p>
+
+                          {uploaded && (
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                              <span className="flex items-center gap-1">
+                                <File className="w-3.5 h-3.5 text-indigo-400" /> {uploaded.fileName}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> Updated: {uploaded.updatedAt ? (uploaded.updatedAt.toDate ? new Date(uploaded.updatedAt.toDate()).toLocaleDateString('en-GB') + ' ' + new Date(uploaded.updatedAt.toDate()).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}) : new Date(uploaded.updatedAt).toLocaleDateString('en-GB') + ' ' + new Date(uploaded.updatedAt).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})) : 'Recently'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                Size: {uploaded.fileSize}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                By: <strong className="text-foreground/80">{uploaded.updatedBy}</strong>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                        {uploaded && (
+                          <button
+                            onClick={() => {
+                              setSuccessToast(`Downloading guidelines for ${dept.name}...`);
+                              setTimeout(() => setSuccessToast(null), 3000);
+                            }}
+                            className="px-4 py-2 bg-surface-tint hover:bg-surface-tint-strong text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest border border-border transition-all flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </button>
+                        )}
+
+                        {profile?.role === 'HOD' && profile?.departmentId === dept.id ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setUploadingDeptId(dept.id);
+                                setTimeout(() => {
+                                  deptFileInputRef.current?.click();
+                                }, 100);
+                              }}
+                              className={cn(
+                                "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 cursor-pointer",
+                                uploaded
+                                  ? "bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20"
+                                  : "bg-indigo-600 hover:bg-indigo-500 text-foreground shadow-lg shadow-indigo-600/20"
+                              )}
+                            >
+                              {uploaded ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5" /> Replace Guidelines
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-3.5 h-3.5" /> Upload Guidelines
+                                </>
+                              )}
+                            </button>
+                            
+                            {uploaded && (
+                              <button
+                                onClick={() => handleDeptGuidelinesDelete(dept.id)}
+                                className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl transition-colors cursor-pointer"
+                                title="Delete guidelines"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SECURE UPLOAD INGESTION MODAL */}
       <AnimatePresence>
         {isUploadModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay backdrop-blur-md">
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="glass-card w-full max-w-2xl border border-white/10 bg-slate-900 overflow-hidden shadow-2xl flex flex-col p-8 gap-6 relative"
+              className="glass-card w-full max-w-2xl border border-border bg-surface overflow-hidden shadow-2xl flex flex-col p-8 gap-6 relative"
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -985,7 +1925,7 @@ export default function FileVault() {
               
               {/* Drag over overlay */}
               {dragOverModal && (
-                <div className="absolute inset-0 bg-indigo-600/25 border-4 border-dashed border-indigo-500/80 z-40 flex flex-col items-center justify-center pointer-events-none text-white font-black uppercase tracking-wider backdrop-blur-xs">
+                <div className="absolute inset-0 bg-indigo-600/25 border-4 border-dashed border-indigo-500/80 z-40 flex flex-col items-center justify-center pointer-events-none text-foreground font-black uppercase tracking-wider backdrop-blur-xs">
                   <Upload className="w-14 h-14 animate-bounce mb-3 text-indigo-300" />
                   Release to Add Document to Vault
                 </div>
@@ -994,16 +1934,16 @@ export default function FileVault() {
               {/* Close Button */}
               <button 
                 onClick={() => setIsUploadModalOpen(false)}
-                className="absolute top-6 right-6 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+                className="absolute top-6 right-6 p-2 rounded-xl bg-surface-tint hover:bg-surface-tint-strong text-muted-foreground hover:text-foreground transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
 
               <div>
-                <h4 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <h4 className="text-2xl font-black text-foreground tracking-tight flex items-center gap-2">
                   <Upload className="w-6 h-6 text-indigo-400" /> Secure Vault Ingestion
                 </h4>
-                <p className="text-slate-500 text-xs font-medium mt-1">Audit compliance check, automated version tracking.</p>
+                <p className="text-subtle-foreground text-xs font-medium mt-1">Audit compliance check, automated version tracking.</p>
               </div>
 
               <form onSubmit={handleUploadSubmit} className="space-y-5">
@@ -1012,10 +1952,10 @@ export default function FileVault() {
                 <div 
                   onClick={() => fileInputRef.current?.click()}
                   className={cn(
-                    "p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:bg-white/[0.02]",
+                    "p-8 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer transition-all hover:bg-foreground/[0.02]",
                     selectedFile 
                       ? "border-indigo-500/30 bg-indigo-500/[0.01]" 
-                      : "border-slate-800 hover:border-slate-700 bg-white/[0.005]"
+                      : "border-border hover:border-border bg-foreground/[0.005]"
                   )}
                 >
                   <input 
@@ -1031,8 +1971,8 @@ export default function FileVault() {
                         <FileText className="w-6 h-6" />
                       </div>
                       <div className="overflow-hidden flex-1">
-                        <h5 className="text-sm font-bold text-white tracking-tight truncate">{selectedFile.name}</h5>
-                        <p className="text-[10px] text-slate-500 font-extrabold uppercase mt-1">
+                        <h5 className="text-sm font-bold text-foreground tracking-tight truncate">{selectedFile.name}</h5>
+                        <p className="text-[10px] text-subtle-foreground font-extrabold uppercase mt-1">
                           {(selectedFile.size / 1024).toFixed(0)} KB • {selectedFile.type || 'Unknown MIME'}
                         </p>
                       </div>
@@ -1043,20 +1983,64 @@ export default function FileVault() {
                           setSelectedFile(null);
                           setScanResult(null);
                         }}
-                        className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-rose-400 transition"
+                        className="p-2 hover:bg-surface-tint-strong rounded-lg text-muted-foreground hover:text-rose-400 transition"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
                     <>
-                      <div className="w-12 h-12 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-center text-slate-500 mb-4 group-hover:text-white transition-colors">
+                      <div className="w-12 h-12 bg-surface-tint border border-border-subtle rounded-2xl flex items-center justify-center text-subtle-foreground mb-4 group-hover:text-foreground transition-colors">
                         <Upload className="w-5 h-5 text-indigo-400" />
                       </div>
-                      <p className="text-sm font-extrabold text-white">Click to browse or drag and drop file here</p>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1.5">PDF and normal office types supported</p>
+                      <p className="text-sm font-extrabold text-foreground">Click to browse or drag and drop file here</p>
+                      <p className="text-[10px] text-subtle-foreground font-bold uppercase tracking-widest mt-1.5">PDF and normal office types supported</p>
                     </>
                   )}
+                </div>
+
+                {/* Standard Templates Reference Download Helper */}
+                <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Library className="w-4 h-4 text-indigo-400" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-foreground/80">
+                      Official Institutional Reference Templates
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    Preparing your file? Ensure you are using the official standard formats. Click to download:
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {['study-guide', 'exam-paper', 'assessment-brief'].map((id) => {
+                      const temp = STANDARD_TEMPLATES_LIST.find(t => t.id === id);
+                      const uploaded = standardTemplates.find(t => t.id === id);
+                      if (!temp) return null;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={!uploaded}
+                          onClick={() => {
+                            if (uploaded) {
+                              setSuccessToast(`Downloading template: ${uploaded.fileName}...`);
+                              setTimeout(() => setSuccessToast(null), 3000);
+                            }
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition",
+                            uploaded 
+                              ? "bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/20 cursor-pointer" 
+                              : "bg-surface-2 border border-border-subtle text-subtle-foreground cursor-not-allowed"
+                          )}
+                          title={uploaded ? `Last updated: ${new Date(uploaded.updatedAt).toLocaleDateString()}` : "Not uploaded by QPO yet"}
+                        >
+                          <Download className="w-3 h-3 shrink-0" />
+                          {temp.name.replace(' Template', '')}
+                          {!uploaded && " (N/A)"}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {isScanning && (
@@ -1074,22 +2058,22 @@ export default function FileVault() {
                     className={cn(
                       "p-5 rounded-2.5xl border flex items-start gap-4 shadow-lg",
                       activeError.type === 'COVER_PAGE' 
-                        ? "bg-amber-950/40 border-amber-500/30 text-amber-200 shadow-amber-500/5" 
-                        : "bg-rose-950/40 border-rose-500/30 text-rose-200 shadow-rose-500/5"
+                        ? "bg-amber-950/40 border-amber-500/30 text-status-warning shadow-amber-500/5"
+                        : "bg-rose-950/40 border-rose-500/30 text-status-danger shadow-rose-500/5"
                     )}
                   >
                     <ShieldAlert className={cn("w-6 h-6 shrink-0 mt-0.5", activeError.type === 'COVER_PAGE' ? "text-amber-500" : "text-rose-500")} />
                     <div className="space-y-1.5">
-                      <h5 className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-1.5">
+                      <h5 className="text-[11px] font-black uppercase tracking-widest text-foreground flex items-center gap-1.5">
                         {activeError.type === 'COVER_PAGE' ? 'COMPLIANCE BLOCKED: Front Cover Page Detected' : 'COMPLIANCE BLOCKED: Invalid File Format'}
                       </h5>
-                      <p className="text-[11px] font-semibold leading-relaxed text-slate-300">
+                      <p className="text-[11px] font-semibold leading-relaxed text-foreground/80">
                         {activeError.message}
                       </p>
                       {activeError.type === 'COVER_PAGE' && (
                         <div className="pt-2 text-[10px] font-bold text-amber-400 uppercase tracking-wide flex flex-col gap-1">
                           <span>Actionable Correction Required:</span>
-                          <span className="text-slate-400 font-medium normal-case block pl-3 border-l border-amber-500/30">
+                          <span className="text-muted-foreground font-medium normal-case block pl-3 border-l border-amber-500/30">
                             1. Open your document editor/PDF utility. <br />
                             2. Remove the first page (cover template / faculty sheet) entirely. <br />
                             3. Save the clean contents ONLY as a PDF. <br />
@@ -1106,8 +2090,8 @@ export default function FileVault() {
                   <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 text-emerald-300 rounded-2xl flex items-start gap-3.5 text-[11px] leading-relaxed">
                     <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-extrabold uppercase tracking-wide text-white block">COMPLIANCE CHECKS PASSED</span>
-                      <p className="text-slate-400 font-medium mt-0.5">
+                      <span className="font-extrabold uppercase tracking-wide text-foreground block">COMPLIANCE CHECKS PASSED</span>
+                      <p className="text-muted-foreground font-medium mt-0.5">
                         File complies with Rule EX-101 (PDF signature format) and has been scan-verified. Zero external administrative front cover templates detected.
                       </p>
                     </div>
@@ -1117,26 +2101,26 @@ export default function FileVault() {
                 {/* Form fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Document Category</label>
+                    <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Document Category</label>
                     <select 
                       value={docCategory} 
                       onChange={handleCategoryChange}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold tracking-wide focus:outline-none focus:border-indigo-500 transition"
+                      className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold tracking-wide focus:outline-none focus:border-indigo-500 transition"
                     >
                       {CATEGORIES.map(c => (
-                        <option key={c.id} value={c.id} className="bg-slate-900">{c.label}</option>
+                        <option key={c.id} value={c.id} className="bg-surface">{c.label}</option>
                       ))}
                     </select>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Rename (Optional)</label>
+                    <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Rename (Optional)</label>
                     <input 
                       type="text" 
                       value={customFileName}
                       onChange={(e) => setCustomFileName(e.target.value)}
                       placeholder="e.g. TAX402_EXAM_S1_2026"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500 transition"
+                      className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-semibold focus:outline-none focus:border-indigo-500 transition"
                     />
                   </div>
                 </div>
@@ -1157,23 +2141,23 @@ export default function FileVault() {
                           className={cn(
                             "p-3 rounded-xl border text-left transition-all cursor-pointer",
                             subCategory === opt.id 
-                              ? "bg-amber-500/10 border-amber-500/40 text-amber-200"
-                              : "bg-white/5 border-white/5 text-slate-400 hover:border-white/10"
+                              ? "bg-amber-500/10 border-amber-500/40 text-status-warning"
+                              : "bg-surface-tint border-border-subtle text-muted-foreground hover:border-border"
                           )}
                         >
                           <span className="text-xs font-black block tracking-tight">{opt.label}</span>
-                          <span className="text-[9px] text-slate-500 mt-1 block leading-relaxed font-medium">{opt.desc}</span>
+                          <span className="text-[9px] text-subtle-foreground mt-1 block leading-relaxed font-medium">{opt.desc}</span>
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="p-4 bg-slate-850/60 rounded-2xl border border-white/5 flex flex-col gap-3.5">
+                <div className="p-4 bg-surface-2/60 rounded-2xl border border-border-subtle flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <span className="text-xs font-black text-white tracking-wide block">Is Exam-Related Document?</span>
-                      <span className="text-[10px] text-slate-500 font-medium leading-none">Subjects file to PDF format & cover page isolation audits</span>
+                      <span className="text-xs font-black text-foreground tracking-wide block">Is Exam-Related Document?</span>
+                      <span className="text-[10px] text-subtle-foreground font-medium leading-none">Subjects file to PDF format & cover page isolation audits</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input 
@@ -1182,39 +2166,39 @@ export default function FileVault() {
                         onChange={(e) => setIsExamRelated(e.target.checked)}
                         className="sr-only peer" 
                       />
-                      <div className="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:bg-white peer-checked:bg-indigo-600 peer-checked:after:border-indigo-500"></div>
+                      <div className="w-11 h-6 bg-surface-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:bg-white peer-checked:bg-indigo-600 peer-checked:after:border-indigo-500"></div>
                     </label>
                   </div>
 
-                  <div className="border-t border-white/5 pt-3.5">
+                  <div className="border-t border-border-subtle pt-3.5">
                     <div className="flex items-start gap-2.5">
                       <input 
                         type="checkbox" 
                         id="check-simulate-cover"
                         checked={simulateCoverPage}
                         onChange={(e) => setSimulateCoverPage(e.target.checked)}
-                        className="mt-0.5 rounded border-white/10 bg-white/5 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        className="mt-0.5 rounded border-border bg-surface-tint text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                       />
-                      <label htmlFor="check-simulate-cover" className="text-[10px] font-bold text-slate-400 uppercase tracking-wide cursor-pointer select-none">
+                      <label htmlFor="check-simulate-cover" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide cursor-pointer select-none">
                         SIMULATE: Include Institutional Front Cover / Title Page
-                        <span className="block text-[9px] font-medium text-slate-500 normal-case mt-0.5">Toggle this to test the automated VaultIQ cover page compliance rule.</span>
+                        <span className="block text-[9px] font-medium text-subtle-foreground normal-case mt-0.5">Toggle this to test the automated VaultIQ cover page compliance rule.</span>
                       </label>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle">
                   <button 
                     type="button" 
                     onClick={() => setIsUploadModalOpen(false)}
-                    className="px-6 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition cursor-pointer"
+                    className="px-6 py-2.5 bg-surface-2 hover:bg-surface-2 text-foreground/80 hover:text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit" 
                     disabled={!selectedFile || isScanning || !!activeError}
-                    className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/10 cursor-pointer disabled:cursor-not-allowed"
+                    className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-surface-2 disabled:text-subtle-foreground text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/10 cursor-pointer disabled:cursor-not-allowed"
                   >
                     Ingest & Log File
                   </button>
@@ -1228,17 +2212,17 @@ export default function FileVault() {
       {/* Cover Page Questionnaire Modal */}
       <AnimatePresence>
         {isQuestionnaireOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-slate-900 border border-white/10 rounded-3xl p-8 max-w-2xl w-full shadow-2xl relative my-8"
+              className="bg-surface border border-border rounded-3xl p-8 max-w-2xl w-full shadow-2xl relative my-8"
             >
               <div className="absolute top-6 right-6">
                 <button 
                   onClick={() => setIsQuestionnaireOpen(false)}
-                  className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-xl transition cursor-pointer"
+                  className="p-2 text-subtle-foreground hover:text-foreground hover:bg-surface-tint rounded-xl transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1246,11 +2230,11 @@ export default function FileVault() {
 
               <div className="space-y-2 mb-6">
                 <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block">Institutional Cover Sheet Generator</span>
-                <h3 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+                <h3 className="text-2xl font-black text-foreground tracking-tight flex items-center gap-2.5">
                   <FileText className="w-6 h-6 text-indigo-400" />
                   Cover Page Questionnaire
                 </h3>
-                <p className="text-slate-400 text-xs font-semibold leading-relaxed">
+                <p className="text-muted-foreground text-xs font-semibold leading-relaxed">
                   Provide standard metadata parameters to generate a clean, unified cover sheet automatically. This cover sheet will be integrated as the secure front page of the exam paper.
                 </p>
               </div>
@@ -1304,26 +2288,26 @@ export default function FileVault() {
               }} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Examiner Name</label>
+                    <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Examiner Name</label>
                     <input 
                       type="text"
                       required
                       value={examinerName}
                       onChange={(e) => setExaminerName(e.target.value)}
                       placeholder="e.g. Prof. J. Smith"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500 transition"
+                      className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-indigo-500 transition"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Internal Moderator Name</label>
+                    <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Internal Moderator Name</label>
                     <input 
                       type="text"
                       required
                       value={internalModeratorName}
                       onChange={(e) => setInternalModeratorName(e.target.value)}
                       placeholder="e.g. Dr. A. Johnson"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500 transition"
+                      className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-indigo-500 transition"
                     />
                   </div>
                 </div>
@@ -1337,83 +2321,83 @@ export default function FileVault() {
                       value={externalModeratorName}
                       onChange={(e) => setExternalModeratorName(e.target.value)}
                       placeholder="e.g. External Reviewer (University of Cape Town)"
-                      className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-amber-500 transition"
+                      className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-amber-500 transition"
                     />
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Date of Test/Exam</label>
+                    <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Date of Test/Exam</label>
                     <input 
                       type="date"
                       required
                       value={examDate}
                       onChange={(e) => setExamDate(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500 transition"
+                      className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-indigo-500 transition"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Total Marks</label>
+                      <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Total Marks</label>
                       <input 
                         type="number"
                         required
                         value={totalMarks}
                         onChange={(e) => setTotalMarks(e.target.value)}
                         placeholder="100"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500 transition"
+                        className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-indigo-500 transition"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Time Allowed</label>
+                      <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Time Allowed</label>
                       <input 
                         type="text"
                         required
                         value={timeAllowed}
                         onChange={(e) => setTimeAllowed(e.target.value)}
                         placeholder="3 Hours"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500 transition"
+                        className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-indigo-500 transition"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Venue</label>
+                  <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Venue</label>
                   <input 
                     type="text"
                     required
                     value={venue}
                     onChange={(e) => setVenue(e.target.value)}
                     placeholder="e.g. Main Hall / Online Portal"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500 transition"
+                    className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-indigo-500 transition"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1 block">Special Instructions</label>
+                  <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest pl-1 block">Special Instructions</label>
                   <textarea 
                     rows={3}
                     value={specialInstructions}
                     onChange={(e) => setSpecialInstructions(e.target.value)}
                     placeholder="Enter special instructions (one per line)..."
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500 transition resize-none font-mono"
+                    className="w-full bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground font-semibold focus:outline-none focus:border-indigo-500 transition resize-none font-mono"
                   />
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle">
                   <button 
                     type="button" 
                     onClick={() => setIsQuestionnaireOpen(false)}
-                    className="px-6 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition cursor-pointer"
+                    className="px-6 py-2.5 bg-surface-2 hover:bg-surface-2 text-foreground/80 hover:text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+                    className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-indigo-600/20 cursor-pointer"
                   >
                     Generate & Dispatch
                   </button>
@@ -1427,29 +2411,29 @@ export default function FileVault() {
       {/* Generated Front Page Cover Sheet Preview Modal */}
       <AnimatePresence>
         {isPreviewingFrontPage && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-slate-900 border border-white/10 rounded-3xl p-1 overflow-hidden max-w-2xl w-full shadow-2xl relative my-8"
+              className="bg-surface border border-border rounded-3xl p-1 overflow-hidden max-w-2xl w-full shadow-2xl relative my-8"
             >
               {/* Header bar */}
-              <div className="flex items-center justify-between px-6 py-4 bg-slate-950 border-b border-white/5">
+              <div className="flex items-center justify-between px-6 py-4 bg-background border-b border-border-subtle">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">VaultIQ Secure Cover Compiler</span>
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">VaultIQ Secure Cover Compiler</span>
                 </div>
                 <button 
                   onClick={() => setIsPreviewingFrontPage(false)}
-                  className="p-2 text-slate-500 hover:text-white hover:bg-white/5 rounded-xl transition cursor-pointer"
+                  className="p-2 text-subtle-foreground hover:text-foreground hover:bg-surface-tint rounded-xl transition cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Cover Page Printable Canvas container */}
-              <div className="p-8 bg-slate-950 max-h-[70vh] overflow-y-auto">
+              <div className="p-8 bg-background max-h-[70vh] overflow-y-auto">
                 <div className="bg-white text-slate-950 p-12 rounded-2xl shadow-xl space-y-8 font-sans border-t-[12px] border-indigo-600 relative overflow-hidden">
                   
                   {/* Decorative faint stamp watermark */}
@@ -1463,26 +2447,26 @@ export default function FileVault() {
                       U
                     </div>
                     <h1 className="text-lg font-black tracking-tight text-slate-900 uppercase">University of Southern Africa</h1>
-                    <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">Faculty of Commerce and Administration</p>
+                    <p className="text-[10px] text-subtle-foreground font-extrabold uppercase tracking-widest">Faculty of Commerce and Administration</p>
                     <p className="text-[9px] text-indigo-600 font-extrabold uppercase mt-1">CONFIDENTIAL ACADEMIC ASSESSMENT SCRIPT</p>
                   </div>
 
                   {/* Module details card */}
                   <div className="grid grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200 text-xs text-slate-800">
                     <div className="space-y-1 text-left">
-                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wide">Module Code</span>
+                      <span className="text-[9px] text-muted-foreground font-black uppercase tracking-wide">Module Code</span>
                       <p className="text-sm font-black text-slate-900">{activeModuleCode}</p>
                     </div>
                     <div className="space-y-1 text-left">
-                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wide">Module Description</span>
+                      <span className="text-[9px] text-muted-foreground font-black uppercase tracking-wide">Module Description</span>
                       <p className="text-sm font-bold text-slate-800">{activeModuleInDb?.name || 'Academic Assessment Course'}</p>
                     </div>
                     <div className="space-y-1 text-left">
-                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wide">Examiner</span>
+                      <span className="text-[9px] text-muted-foreground font-black uppercase tracking-wide">Examiner</span>
                       <p className="text-sm font-extrabold text-slate-800">{examinerName || 'Not specified'}</p>
                     </div>
                     <div className="space-y-1 text-left">
-                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wide">Internal Moderator</span>
+                      <span className="text-[9px] text-muted-foreground font-black uppercase tracking-wide">Internal Moderator</span>
                       <p className="text-sm font-extrabold text-slate-800">{internalModeratorName || 'Not specified'}</p>
                     </div>
                     {isExitLevelActive && (
@@ -1499,46 +2483,46 @@ export default function FileVault() {
                   {/* Administrative parameters */}
                   <div className="grid grid-cols-3 gap-4 text-xs border-b border-slate-200 pb-6">
                     <div className="bg-slate-50/50 p-3 rounded-lg text-center border border-slate-200/60">
-                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Assessment Date</span>
+                      <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider block mb-1">Assessment Date</span>
                       <span className="font-extrabold text-slate-800">{examDate || '2026-11-20'}</span>
                     </div>
                     <div className="bg-slate-50/50 p-3 rounded-lg text-center border border-slate-200/60">
-                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Total Marks</span>
+                      <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider block mb-1">Total Marks</span>
                       <span className="font-extrabold text-indigo-600 text-sm">{totalMarks || '100'} Marks</span>
                     </div>
                     <div className="bg-slate-50/50 p-3 rounded-lg text-center border border-slate-200/60">
-                      <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Time Allowed</span>
+                      <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider block mb-1">Time Allowed</span>
                       <span className="font-extrabold text-slate-800">{timeAllowed || '3 Hours'}</span>
                     </div>
                   </div>
 
                   {/* Special Instructions */}
                   <div className="space-y-2 text-xs text-left">
-                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-wide block">Instructions to Candidates</span>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-700 font-semibold leading-relaxed whitespace-pre-line font-mono text-[11px]">
+                    <span className="text-[9px] text-muted-foreground font-black uppercase tracking-wide block">Instructions to Candidates</span>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-subtle-foreground/70 font-semibold leading-relaxed whitespace-pre-line font-mono text-[11px]">
                       {specialInstructions || 'No special instructions listed.'}
                     </div>
                   </div>
 
                   {/* Footer metadata stamp */}
-                  <div className="flex justify-between items-end border-t border-slate-200 pt-6 text-[8px] text-slate-400 font-black uppercase tracking-wider">
+                  <div className="flex justify-between items-end border-t border-slate-200 pt-6 text-[8px] text-muted-foreground font-black uppercase tracking-wider">
                     <div className="space-y-0.5 text-left">
                       <span>VaultIQ Cryptographic Integrity Code:</span>
                       <span className="font-mono text-indigo-600 block text-[9px]">VIQ-COMP-984-S1-{activeModuleCode}</span>
                     </div>
                     <div className="text-right">
                       <span>Secured & Released:</span>
-                      <span className="block text-slate-500 font-mono text-[9px]">Just Now</span>
+                      <span className="block text-subtle-foreground font-mono text-[9px]">Just Now</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Footer actions */}
-              <div className="flex justify-end gap-3 px-6 py-4 bg-slate-950 border-t border-white/5">
+              <div className="flex justify-end gap-3 px-6 py-4 bg-background border-t border-border-subtle">
                 <button 
                   onClick={() => setIsPreviewingFrontPage(false)}
-                  className="px-6 py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition cursor-pointer border border-white/5"
+                  className="px-6 py-2.5 bg-surface-2 hover:bg-surface-2 text-foreground/80 hover:text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition cursor-pointer border border-border-subtle"
                 >
                   Close Preview
                 </button>
@@ -1548,7 +2532,7 @@ export default function FileVault() {
                     setSuccessToast("Simulating secure print spooler dispatch...");
                     setTimeout(() => setSuccessToast(null), 3000);
                   }}
-                  className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-emerald-600/15 cursor-pointer flex items-center gap-2"
+                  className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-foreground rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-emerald-600/15 cursor-pointer flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" /> Close & Open Exam Vault
                 </button>

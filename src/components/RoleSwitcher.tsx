@@ -30,16 +30,16 @@ export default function RoleSwitcher() {
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-xl hover:bg-white/10 transition-all group"
+        className="flex items-center gap-3 bg-surface-tint border border-border px-4 py-2 rounded-xl hover:bg-surface-tint-strong transition-all group"
       >
         <div className="p-1.5 bg-indigo-500/20 rounded-lg group-hover:scale-110 transition-transform">
           <Shield className="w-4 h-4 text-indigo-400" />
         </div>
         <div className="text-left">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Active Role</p>
+          <p className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest leading-none mb-1">Active Role</p>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-white uppercase tracking-tight">{currentRole.label}</span>
-            <ChevronDown className={cn("w-3 h-3 text-slate-500 transition-transform", isOpen && "rotate-180")} />
+            <span className="text-xs font-black text-foreground uppercase tracking-tight">{currentRole.label}</span>
+            <ChevronDown className={cn("w-3 h-3 text-subtle-foreground transition-transform", isOpen && "rotate-180")} />
           </div>
         </div>
       </button>
@@ -52,10 +52,10 @@ export default function RoleSwitcher() {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-2 w-64 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+              className="absolute right-0 mt-2 w-64 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden"
             >
-              <div className="p-4 bg-white/5 border-b border-white/5">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Select Access Perspective</p>
+              <div className="p-4 bg-surface-tint border-b border-border-subtle">
+                <p className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest">Select Access Perspective</p>
               </div>
               <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
                 {ROLES.map((r) => (
@@ -66,13 +66,13 @@ export default function RoleSwitcher() {
                       setIsOpen(false);
                     }}
                     className={cn(
-                      "w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0",
+                      "w-full flex items-center justify-between px-4 py-3 hover:bg-surface-tint transition-colors text-left border-b border-border-subtle last:border-0",
                       profile?.role === r.role ? "bg-indigo-500/10" : ""
                     )}
                   >
                     <div>
-                      <p className="text-[11px] font-black text-white uppercase tracking-wider">{r.label}</p>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{r.access}</p>
+                      <p className="text-[11px] font-black text-foreground uppercase tracking-wider">{r.label}</p>
+                      <p className="text-[9px] font-bold text-subtle-foreground uppercase tracking-widest">{r.access}</p>
                     </div>
                     {profile?.role === r.role && (
                       <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]" />

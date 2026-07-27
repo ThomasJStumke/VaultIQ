@@ -37,7 +37,7 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'REMINDER' | 'WARNING' | 'ESCALATION' | 'AUDIT';
+  type: 'REMINDER' | 'WARNING' | 'ESCALATION' | 'AUDIT' | 'COMPLIANCE';
   status: 'UNREAD' | 'READ';
   createdAt: string;
   moduleCode?: string;
