@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  X, 
-  Upload, 
-  FileText, 
-  CheckCircle2, 
+import {
+  X,
+  Upload,
+  FileText,
+  CheckCircle2,
   Loader2,
   ShieldCheck,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { Module, AIValidationResult } from '../types';
-import { uploadEvidenceMetadata, updateModuleCompliance } from '../services/firebaseService';
+import { Module } from '../types';
+import { uploadEvidenceMetadata } from '../services/dataService';
 import { useAuth } from '../hooks/useAuth';
-import AIValidator from './AIValidator';
-import { validateDocumentWithAI } from '../services/aiValidationService';
 
 interface EvidenceUploaderProps {
   module: Module;
@@ -25,54 +23,28 @@ export default function EvidenceUploader({ module, onClose }: EvidenceUploaderPr
   const [file, setFile] = useState<File | null>(null);
   const [evidenceType, setEvidenceType] = useState('STUDY_GUIDE');
   const [loading, setLoading] = useState(false);
-  const [analysis, setAnalysis] = useState<AIValidationResult | null>(null);
   const [committed, setCommitted] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setFile(e.target.files[0]);
-      setAnalysis(null);
       setCommitted(false);
     }
   };
 
-  const uploadAndValidate = async () => {
+  const handleCommit = async () => {
     if (!file || !user) return;
     setLoading(true);
 
     try {
-      const result = await validateDocumentWithAI(file, module, evidenceType);
-      setAnalysis(result);
-    } catch (err) {
-      console.error(err);
-      alert("AI Analysis failed. Please check server logs.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCommit = async () => {
-    if (!analysis || !file || !user) return;
-    setLoading(true);
-
-    try {
-      // 1. Upload Metadata to Firestore
       await uploadEvidenceMetadata(module.id, {
         moduleId: module.id,
         type: evidenceType as any,
         storagePath: `evidence/${module.code}/${file.name}`, // Simulated path
-        uploadedBy: user.uid,
+        uploadedBy: user.id,
         uploadedAt: new Date().toISOString(),
-        aiValidationStatus: analysis.status === 'APPROVED' ? 'VALID' : 'INVALID',
-        aiFeedback: analysis.feedback.join(' ')
+        aiValidationStatus: 'PENDING',
       });
-
-      // 2. Update Module Compliance if valid
-      if (analysis.status === 'APPROVED' || analysis.status === 'PARTIAL') {
-        await updateModuleCompliance(module.id, 'COMPLIANT');
-      } else {
-        await updateModuleCompliance(module.id, 'NON_COMPLIANT');
-      }
 
       setCommitted(true);
       setTimeout(() => onClose(), 2000);
@@ -171,48 +143,17 @@ export default function EvidenceUploader({ module, onClose }: EvidenceUploaderPr
               <p className="relative z-10 text-[10px] text-slate-500 font-extrabold uppercase tracking-[0.2em]">Institutional PDF Standard • Max 10MB</p>
             </div>
 
-            {file && !analysis && (
-              <button 
-                onClick={uploadAndValidate}
+            {file && !committed && (
+              <button
+                onClick={handleCommit}
                 disabled={loading}
                 className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-indigo-500 transition-all shadow-2xl shadow-indigo-600/30 flex items-center justify-center gap-4 disabled:opacity-50 active:scale-[0.98] border border-white/10"
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <ShieldCheck className="w-6 h-6" />}
-                {loading ? "Decrypting & Analyzing..." : "Initiate AI Verification"}
+                {loading ? "Storing Artifact..." : "Upload & Store Artifact"}
               </button>
             )}
           </div>
-
-          <AnimatePresence>
-            {(loading || analysis) && (
-              <div className="space-y-6">
-                <AIValidator result={analysis} isProcessing={loading && !analysis} />
-                
-                {analysis && (
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={handleCommit}
-                      disabled={loading}
-                      className={cn(
-                        "flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95 border flex items-center justify-center gap-2",
-                        analysis.status !== 'REJECTED' 
-                          ? "bg-indigo-600 text-white border-indigo-400/50 hover:bg-indigo-500 shadow-xl shadow-indigo-600/20" 
-                          : "bg-rose-600 text-white border-rose-400/50 hover:bg-rose-500 shadow-xl shadow-rose-600/20"
-                      )}
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (analysis.status !== 'REJECTED' ? "Confirm & Store Artifact" : "Discard Artifact")}
-                    </button>
-                    <button 
-                      onClick={() => { setFile(null); setAnalysis(null); }}
-                      className="px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-slate-400 hover:text-white hover:bg-white/10 text-xs font-black uppercase tracking-widest transition-all"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </AnimatePresence>
         </div>
       </motion.div>
     </motion.div>

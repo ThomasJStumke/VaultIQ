@@ -12,6 +12,7 @@ export enum Permission {
 }
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  SUPER_ADMIN: Object.values(Permission),
   LECTURER: [
     Permission.VIEW_MODULE,
     Permission.UPLOAD_EVIDENCE

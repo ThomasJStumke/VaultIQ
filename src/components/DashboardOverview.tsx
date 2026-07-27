@@ -37,9 +37,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatDate } from '../lib/utils';
 import { Module, Evidence } from '../types';
-import { subscribeToModules, subscribeToEvidence } from '../services/firebaseService';
+import { subscribeToModules, subscribeToEvidence } from '../services/dataService';
 import { useAuth } from '../hooks/useAuth';
-import { mapUserRoleToRole, getPermission, filterModulesByScope } from '../permissions.config';
+import { mapUserRolesToRoles, getPermissionForRoles, filterModulesByScope } from '../permissions.config';
 
 const DEPARTMENTS = [
   { id: 'FAI_AUD_TAX', name: 'Auditing & Taxation', code: 'AUD_TAX', icon: ShieldCheck, faculty: 'Faculty of Accounting & Informatics' },
@@ -52,11 +52,13 @@ const DEPARTMENTS = [
 
 export default function DashboardOverview() {
   const { profile } = useAuth();
-  const mappedRole = profile?.role ? mapUserRoleToRole(profile.role) : null;
-  const permission = mappedRole ? getPermission(mappedRole, 'Dashboard') : { access: 'none' };
-  
+  const mappedRoles = mapUserRolesToRoles(profile?.roles);
+  const permission = getPermissionForRoles(profile?.roles, 'Dashboard');
+
   // Decide if this user belongs to high-level dean, exams, or auditor levels
-  const isHighLevelObserver = mappedRole !== 'Lecturer' && mappedRole !== 'HOD' && mappedRole !== 'Faculty Admin' && mappedRole !== 'Programme Coordinator';
+  const isHighLevelObserver = mappedRoles.length > 0 && mappedRoles.every(
+    (r) => r !== 'Lecturer' && r !== 'HOD' && r !== 'Faculty Admin' && r !== 'Programme Coordinator'
+  );
 
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,7 +267,7 @@ export default function DashboardOverview() {
                 Executive Desk Mode
               </span>
               <span className="px-2.5 py-1 bg-white/5 text-slate-400 text-[10px] font-black uppercase tracking-widest border border-white/10 rounded-md">
-                Role: {profile?.role?.replace('_', ' ')}
+                Role: {profile?.roles?.map((r) => r.replace('_', ' ')).join(', ')}
               </span>
             </div>
             <h2 className="text-4xl font-black text-white tracking-tighter">
@@ -480,7 +482,7 @@ export default function DashboardOverview() {
                   {/* Pre-seeded documents list */}
                   <div className="space-y-3">
                     {getPreSeededDocuments(selectedModule).map((docItem) => {
-                      const isGatedForExams = mappedRole === 'Exams' && docItem.type === 'EXAM_PAPER' && selectedModule.complianceStatus !== 'COMPLIANT';
+                      const isGatedForExams = mappedRoles.includes('Exams') && docItem.type === 'EXAM_PAPER' && selectedModule.complianceStatus !== 'COMPLIANT';
                       return (
                         <div 
                           key={docItem.id}
@@ -548,7 +550,7 @@ export default function DashboardOverview() {
                   
                   <div className="space-y-3">
                     {liveEvidence.map((ev) => {
-                      const isEvidenceGatedForExams = mappedRole === 'Exams' && ev.type === 'EXAM_PAPER' && selectedModule.complianceStatus !== 'COMPLIANT';
+                      const isEvidenceGatedForExams = mappedRoles.includes('Exams') && ev.type === 'EXAM_PAPER' && selectedModule.complianceStatus !== 'COMPLIANT';
                       return (
                         <div 
                           key={ev.id}

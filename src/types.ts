@@ -105,18 +105,19 @@ export interface FileMetadata {
   hash: string;
 }
 
-export type UserRole = 
-  | 'LECTURER' 
-  | 'HOD' 
+export type UserRole =
+  | 'SUPER_ADMIN'
+  | 'LECTURER'
+  | 'HOD'
   | 'PROGRAMME_COORDINATOR'
-  | 'FACULTY_ADMIN' 
+  | 'FACULTY_ADMIN'
   | 'DEPUTY_DEAN'
   | 'EXECUTIVE_DEAN'
   | 'DVC_TL'
   | 'CQPA'
   | 'QPO'
-  | 'INTERNAL_MODERATOR' 
-  | 'EXTERNAL_MODERATOR' 
+  | 'INTERNAL_MODERATOR'
+  | 'EXTERNAL_MODERATOR'
   | 'AUDITOR'
   | 'EXAMS';
 
@@ -124,7 +125,9 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
-  role: UserRole;
+  // A user can hold many roles at once (see the `user_type` table). Page and
+  // action visibility is the union of what any of these roles grants.
+  roles: UserRole[];
   facultyId?: string;
   departmentId?: string;
   assignedModules?: string[];

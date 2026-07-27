@@ -22,8 +22,8 @@ import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { ExamMetadata, SecureAuditEntry, Evidence } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { subscribeToModules, subscribeToEvidence, addNotification } from '../services/firebaseService';
-import { mapUserRoleToRole, getPermission, filterModulesByScope } from '../permissions.config';
+import { subscribeToModules, subscribeToEvidence, addNotification } from '../services/dataService';
+import { getPermissionForRoles, filterModulesByScope } from '../permissions.config';
 import EvidenceUploader from './EvidenceUploader';
 
 interface PrintJobState {
@@ -44,8 +44,7 @@ const MODULES_STUDENT_ENROLMENT: Record<string, number> = {
 
 export default function ExamVault() {
   const { profile } = useAuth();
-  const mappedRole = profile?.role ? mapUserRoleToRole(profile.role) : null;
-  const permission = mappedRole ? getPermission(mappedRole, 'Exam Vault') : { access: 'none' };
+  const permission = getPermissionForRoles(profile?.roles, 'Exam Vault');
   
   const canUpload = permission.access === 'upload_view';
   const canAssign = permission.access === 'assign_view';
@@ -133,7 +132,7 @@ export default function ExamVault() {
         action: 'DECRYPT',
         timestamp: new Date().toISOString(),
         ipAddress: '168.212.92.1',
-        userAgent: `WebClient (${profile?.role || 'VIEWER'})`
+        userAgent: `WebClient (${profile?.roles?.join('/') || 'VIEWER'})`
       };
       setLogs(prev => [entry, ...prev]);
     } else {

@@ -14,7 +14,7 @@ import {
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Notification } from '../types';
-import { subscribeToNotifications } from '../services/firebaseService';
+import { subscribeToNotifications } from '../services/dataService';
 
 const DUMMY_NOTIFICATIONS: Notification[] = [
   { id: '1', userId: 'MrA', title: 'Overdue: Study Guide', message: 'ENG101 Study Guide is 2 days past due. Tier 1 Escalation active.', type: 'WARNING', status: 'UNREAD', createdAt: '2026-05-15T10:00:00Z', moduleCode: 'ENG101', escalationTier: 1 },

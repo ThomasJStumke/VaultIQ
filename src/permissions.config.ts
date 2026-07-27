@@ -461,6 +461,12 @@ export function getVisibleScreensForRole(role: Role): Screen[] {
 
 export function mapUserRoleToRole(userRole: string): Role {
   switch (userRole) {
+    case 'SUPER_ADMIN':
+      // Super Admin bypasses page/action gating entirely (see useAuth's
+      // isSuperAdmin flag) — this mapping only matters as a fallback for
+      // the finer-grained in-page checks below, so map to the broadest
+      // existing role rather than defaulting to Lecturer.
+      return 'Faculty Admin';
     case 'LECTURER':
     case 'INTERNAL_MODERATOR':
     case 'EXTERNAL_MODERATOR':
@@ -491,21 +497,17 @@ export function mapUserRoleToRole(userRole: string): Role {
   }
 }
 
-export function filterModulesByScope(modules: any[], profile: any): any[] {
-  if (!profile) return [];
-  const role = mapUserRoleToRole(profile.role);
-  const scope = getScope(role);
-  
+function filterByScope(modules: any[], scope: Scope, profile: any): any[] {
   if (scope === 'own') {
-    return modules.filter(m => 
-      m.lecturerUids?.includes(profile.displayName) || 
-      m.lecturerUids?.includes(profile.uid) || 
+    return modules.filter(m =>
+      m.lecturerUids?.includes(profile.displayName) ||
+      m.lecturerUids?.includes(profile.uid) ||
       m.lecturerUids?.includes(profile.email)
     );
   }
   if (scope === 'assigned') {
-    return modules.filter(m => 
-      profile.assignedModules?.includes(m.id) || 
+    return modules.filter(m =>
+      profile.assignedModules?.includes(m.id) ||
       profile.assignedModules?.includes(m.code) ||
       m.lecturerUids?.includes(profile.displayName)
     );
@@ -515,5 +517,52 @@ export function filterModulesByScope(modules: any[], profile: any): any[] {
   }
   // 'faculty'
   return modules;
+}
+
+// A user can hold multiple roles now. Their visible modules are the union of
+// what each individual role's scope would show them — unless any one role
+// has faculty-wide scope, in which case that wins outright.
+// ---------------------------------------------------------------------------
+// 13. MULTI-ROLE HELPERS
+//     A user can hold many roles (see the user_type table). Fine-grained
+//     per-screen access is the union of what any one of their roles grants
+//     — if ANY mapped role permits an access level, the user gets it.
+// ---------------------------------------------------------------------------
+
+const ACCESS_ORDER: AccessLevel[] = ['none', 'view', 'view_print', 'upload_view', 'assign_view'];
+
+export function mapUserRolesToRoles(userRoles: string[] | undefined): Role[] {
+  return (userRoles || []).map(mapUserRoleToRole);
+}
+
+export function getPermissionForRoles(userRoles: string[] | undefined, screen: Screen): PermissionEntry {
+  let best: PermissionEntry = { access: 'none' };
+  for (const role of mapUserRolesToRoles(userRoles)) {
+    const entry = getPermission(role, screen);
+    if (ACCESS_ORDER.indexOf(entry.access) > ACCESS_ORDER.indexOf(best.access)) best = entry;
+  }
+  return best;
+}
+
+export function filterModulesByScope(modules: any[], profile: any): any[] {
+  if (!profile) return [];
+  const userRoles: string[] = profile.roles || (profile.role ? [profile.role] : []);
+  if (userRoles.length === 0) return [];
+  if (userRoles.includes('SUPER_ADMIN')) return modules;
+
+  const scopes = userRoles.map((ur) => getScope(mapUserRoleToRole(ur)));
+  if (scopes.includes('faculty')) return modules;
+
+  const seen = new Set<string>();
+  const result: any[] = [];
+  for (const scope of scopes) {
+    for (const m of filterByScope(modules, scope, profile)) {
+      if (!seen.has(m.id)) {
+        seen.add(m.id);
+        result.push(m);
+      }
+    }
+  }
+  return result;
 }
 

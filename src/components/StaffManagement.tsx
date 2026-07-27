@@ -32,7 +32,7 @@ import {
   subscribeToStudentEvaluations,
   subscribeToModules,
   subscribeToDevelopmentPlans
-} from '../services/firebaseService';
+} from '../services/dataService';
 
 interface StaffMember {
   uid: string;
@@ -399,7 +399,7 @@ export default function StaffManagement() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {profile?.role === 'FACULTY_ADMIN' && (
+          {profile?.roles?.includes('FACULTY_ADMIN') && (
             <>
               <button 
                 onClick={() => {
@@ -426,14 +426,14 @@ export default function StaffManagement() {
             </>
           )}
 
-          {profile?.role === 'FACULTY_ADMIN' ? (
+          {profile?.roles?.includes('FACULTY_ADMIN') ? (
             <span className="px-4 py-2.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-indigo-400 animate-pulse" /> Faculty Admin Active
             </span>
           ) : (
             <div className="text-right">
               <span className="px-3 py-1.5 bg-slate-800 text-slate-400 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                Read Only Access ({profile?.role || 'LECTURER'})
+                Read Only Access ({profile?.roles?.join(', ') || 'LECTURER'})
               </span>
             </div>
           )}
@@ -703,7 +703,7 @@ export default function StaffManagement() {
                   </div>
                 </div>
 
-                {profile?.role === 'FACULTY_ADMIN' && (
+                {profile?.roles?.includes('FACULTY_ADMIN') && (
                   <div className="mt-4 pt-4 border-t border-white/5">
                     {isAppointingThis ? (
                       <form onSubmit={handleAppointsHodSubmit} className="space-y-3">
@@ -805,7 +805,7 @@ export default function StaffManagement() {
 
                     {/* Role allocation */}
                     <td className="px-6 py-4">
-                      {profile?.role === 'FACULTY_ADMIN' ? (
+                      {profile?.roles?.includes('FACULTY_ADMIN') ? (
                         <select 
                            className="px-3 py-1.5 bg-slate-800 border border-white/10 rounded-lg text-slate-250 font-bold text-xs focus:ring-1 focus:ring-indigo-500"
                           value={staff.role}
@@ -825,7 +825,7 @@ export default function StaffManagement() {
 
                     {/* Department Allocation */}
                     <td className="px-6 py-4">
-                      {profile?.role === 'FACULTY_ADMIN' ? (
+                      {profile?.roles?.includes('FACULTY_ADMIN') ? (
                         <select 
                           className="px-3 py-1.5 bg-slate-800 border border-white/10 rounded-lg text-slate-200 font-bold text-xs focus:ring-1 focus:ring-indigo-500"
                           value={staff.departmentId || ''}

@@ -1,26 +1,22 @@
 import React, { useState } from 'react';
-import { 
+import {
   Bell,
-  Activity, 
-  LogOut, 
-  ChevronRight, 
-  Plus, 
-  LayoutDashboard, 
-  BookOpen, 
-  ShieldCheck, 
-  Users, 
+  Activity,
+  LogOut,
+  ChevronRight,
+  Plus,
+  LayoutDashboard,
+  BookOpen,
+  ShieldCheck,
+  Users,
   BarChart3,
   Layers,
-  Award
+  Award,
+  Settings,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth, hasAction } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
-import { 
-  getPermission, 
-  mapUserRoleToRole, 
-  Screen 
-} from '../permissions.config';
 
 // Views
 import DashboardOverview from './DashboardOverview';
@@ -35,44 +31,63 @@ import NotificationCenter from './NotificationCenter';
 import RoleSwitcher from './RoleSwitcher';
 import ModuleMapping from './ModuleMapping';
 import StudentEvaluations from './StudentEvaluations';
+import PlatformSetup from './PlatformSetup';
+
+// Static icon/component lookup per page key — the DB only stores key/label,
+// the rest of the shell (icon, which component to render) stays in code.
+const PAGE_ICONS: Record<string, any> = {
+  dashboard: LayoutDashboard,
+  modules: BookOpen,
+  vault: ShieldCheck,
+  exams: ShieldCheck,
+  notifications: Bell,
+  compliance: Activity,
+  mapping: Layers,
+  staff: Users,
+  evaluations: Award,
+  stats: BarChart3,
+  platform_setup: Settings,
+};
+
+const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
+  dashboard: DashboardOverview,
+  modules: ModuleList,
+  vault: FileVault,
+  exams: ExamVault,
+  notifications: NotificationCenter,
+  compliance: ComplianceEngine,
+  mapping: ModuleMapping,
+  staff: StaffManagement,
+  evaluations: StudentEvaluations,
+  stats: ExecutiveAnalytics,
+  platform_setup: PlatformSetup,
+};
 
 export default function MainApp() {
-  const { profile, logout } = useAuth();
+  const { profile, logout, visiblePages, pageActions, isSuperAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
 
   // Dummy module for the uploader demo
   const dummyModule: any = { id: 'demo', code: 'ENG101', name: 'Software Engineering Fundamentals' };
 
-  const mappedRole = profile?.role ? mapUserRoleToRole(profile.role) : null;
+  const navItems = visiblePages.map((p) => ({
+    id: p.key,
+    label: p.label,
+    icon: PAGE_ICONS[p.key] || LayoutDashboard,
+  }));
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, screen: 'Dashboard' as Screen },
-    { id: 'modules', label: 'My Modules', icon: BookOpen, screen: 'My Modules' as Screen },
-    { id: 'vault', label: 'File Vault', icon: ShieldCheck, screen: 'File Vault' as Screen },
-    { id: 'exams', label: 'Exam Vault', icon: ShieldCheck, screen: 'Exam Vault' as Screen },
-    { id: 'notifications', label: 'Alerts', icon: Bell, screen: 'System Alerts' as Screen },
-    { id: 'compliance', label: 'Compliance Engine', icon: Activity, screen: 'Compliance Engine' as Screen },
-    { id: 'mapping', label: 'Module Mapping', icon: Layers, screen: 'Module Mapping' as Screen },
-    { id: 'staff', label: 'Staff & Roles', icon: Users, screen: 'Staff & Roles Management' as Screen },
-    { id: 'evaluations', label: 'Student Evaluations', icon: Award, screen: 'Student Evaluations' as Screen },
-    { id: 'stats', label: 'Architecture & Stats', icon: BarChart3, screen: 'Executive Analytics' as Screen },
-  ];
-
-  const filteredNav = navItems.filter(item => {
-    if (!mappedRole) return false;
-    return getPermission(mappedRole, item.screen).access !== 'none';
-  });
-
-  // Automatically reset to the first allowed tab if the selected tab is unauthorized for the current role
+  // Automatically reset to the first allowed tab if the selected tab is unauthorized for the current role(s)
   React.useEffect(() => {
-    if (mappedRole && filteredNav.length > 0) {
-      const activeItem = navItems.find(item => item.id === activeTab);
-      if (!activeItem || getPermission(mappedRole, activeItem.screen).access === 'none') {
-        setActiveTab(filteredNav[0].id);
-      }
+    if (navItems.length > 0 && !navItems.some((item) => item.id === activeTab)) {
+      setActiveTab(navItems[0].id);
     }
-  }, [mappedRole, activeTab, filteredNav]);
+  }, [navItems, activeTab]);
+
+  const ActiveComponent = PAGE_COMPONENTS[activeTab];
+  const canUpload =
+    hasAction(pageActions, isSuperAdmin, 'modules', 'upload') ||
+    hasAction(pageActions, isSuperAdmin, 'vault', 'upload');
 
   return (
     <div className="flex h-screen bg-slate-950 font-sans relative overflow-hidden">
@@ -104,7 +119,7 @@ export default function MainApp() {
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">
-          {filteredNav.map((item) => (
+          {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
@@ -142,7 +157,9 @@ export default function MainApp() {
                 <p className="text-sm font-bold text-white truncate">{profile?.displayName}</p>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider">{profile?.role}</p>
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider">
+                    {isSuperAdmin ? 'Super Admin' : profile?.roles?.join(', ')}
+                  </p>
                 </div>
               </div>
             </div>
@@ -179,11 +196,8 @@ export default function MainApp() {
               AI Engine: Active
             </div>
 
-            {mappedRole && (
-              getPermission(mappedRole, 'My Modules').access === 'upload_view' || 
-              getPermission(mappedRole, 'File Vault').access === 'upload_view'
-            ) && (
-              <button 
+            {canUpload && (
+              <button
                 onClick={() => setIsUploaderOpen(true)}
                 className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/20 active:scale-95 border border-white/10"
               >
@@ -206,16 +220,7 @@ export default function MainApp() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'dashboard' && <DashboardOverview />}
-            {activeTab === 'modules' && <ModuleList />}
-            {activeTab === 'vault' && <FileVault />}
-            {activeTab === 'exams' && <ExamVault />}
-            {activeTab === 'notifications' && <NotificationCenter />}
-            {activeTab === 'compliance' && <ComplianceEngine />}
-            {activeTab === 'mapping' && <ModuleMapping />}
-            {activeTab === 'staff' && <StaffManagement />}
-            {activeTab === 'evaluations' && <StudentEvaluations />}
-            {activeTab === 'stats' && <ExecutiveAnalytics />}
+            {ActiveComponent && <ActiveComponent />}
           </motion.div>
         </div>
       </main>

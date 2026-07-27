@@ -22,8 +22,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
-import { cn } from '../lib/utils';
-import { mapUserRoleToRole, getPermission, filterModulesByScope } from '../permissions.config';
+import { cn, hasAnyRole } from '../lib/utils';
+import { filterModulesByScope } from '../permissions.config';
 import { 
   subscribeToQuestionnaires, 
   addQuestionnaire, 
@@ -33,7 +33,7 @@ import {
   subscribeToDevelopmentPlans,
   addDevelopmentPlan,
   updateDevelopmentPlan
-} from '../services/firebaseService';
+} from '../services/dataService';
 
 interface Questionnaire {
   id: string;
@@ -339,7 +339,7 @@ export default function StudentEvaluations() {
             Developmental Plans
           </button>
 
-          {['CQPA', 'FACULTY_ADMIN', 'QPO'].includes(profile?.role || '') && (
+          {hasAnyRole(profile?.roles, 'CQPA', 'FACULTY_ADMIN', 'QPO') && (
             <button 
               onClick={() => setEvalTab('setup')}
               className={cn(
@@ -884,7 +884,7 @@ export default function StudentEvaluations() {
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Propose Action Section */}
-                {['HOD', 'Programme Coordinator', 'CQPA', 'Faculty Admin'].includes(profile?.role || '') ? (
+                {hasAnyRole(profile?.roles, 'HOD', 'PROGRAMME_COORDINATOR', 'CQPA', 'FACULTY_ADMIN') ? (
                   <div className="lg:col-span-4 space-y-6">
                     <div>
                       <h4 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
@@ -996,7 +996,7 @@ export default function StudentEvaluations() {
 
                 {/* Plans List Explorer */}
                 <div className={cn(
-                  ['HOD', 'Programme Coordinator', 'CQPA', 'Faculty Admin'].includes(profile?.role || '') ? "lg:col-span-8" : "lg:col-span-12",
+                  hasAnyRole(profile?.roles, 'HOD', 'PROGRAMME_COORDINATOR', 'CQPA', 'FACULTY_ADMIN') ? "lg:col-span-8" : "lg:col-span-12",
                   "space-y-4"
                 )}>
                   <div className="flex justify-between items-center pb-2 border-b border-white/5">
@@ -1060,7 +1060,7 @@ export default function StudentEvaluations() {
                               </div>
 
                               {/* Save target date block */}
-                              {profile?.role === 'Lecturer' && (
+                              {profile?.roles?.includes('LECTURER') && (
                                 <div className="flex items-center gap-2">
                                   <input 
                                     type="date" 
@@ -1092,7 +1092,7 @@ export default function StudentEvaluations() {
                                 </div>
                               )}
 
-                              {profile?.role === 'HOD' && plan.status !== 'COMPLETED' && (
+                              {profile?.roles?.includes('HOD') && plan.status !== 'COMPLETED' && (
                                 <button
                                   type="button"
                                   onClick={async () => {
@@ -1136,7 +1136,7 @@ export default function StudentEvaluations() {
                                 )}
 
                                 {/* Log new update form */}
-                                {profile?.role === 'Lecturer' && (
+                                {profile?.roles?.includes('LECTURER') && (
                                   <div className="flex flex-col sm:flex-row gap-2 pt-1">
                                     <input 
                                       type="text"

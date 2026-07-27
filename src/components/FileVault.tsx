@@ -23,7 +23,7 @@ import { cn } from '../lib/utils';
 import { DocCategory, Module } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
-import { mapUserRoleToRole, getPermission } from '../permissions.config';
+import { getPermissionForRoles } from '../permissions.config';
 import { 
   subscribeToModules, 
   subscribeToEvidence, 
@@ -32,7 +32,7 @@ import {
   updateEvidence,
   addNotification,
   updateModule 
-} from '../services/firebaseService';
+} from '../services/dataService';
 
 const CATEGORIES: { id: DocCategory; label: string; color: string; description: string }[] = [
   { id: 'CURRICULUM', label: 'Curriculum', color: 'text-blue-400', description: 'Academic frameworks and study guides' },
@@ -56,8 +56,7 @@ interface VaultFile {
 
 export default function FileVault() {
   const { profile } = useAuth();
-  const mappedRole = profile?.role ? mapUserRoleToRole(profile.role) : null;
-  const permission = mappedRole ? getPermission(mappedRole, 'File Vault') : { access: 'none' };
+  const permission = getPermissionForRoles(profile?.roles, 'File Vault');
   
   const canUpload = permission.access === 'upload_view';
   const canAssign = permission.access === 'assign_view';
@@ -647,7 +646,7 @@ export default function FileVault() {
                         <div className="flex items-center gap-1.5 bg-slate-950 border border-white/10 px-2 py-1 rounded-xl">
                           <button
                             type="button"
-                            disabled={profile?.role !== 'HOD'}
+                            disabled={!profile?.roles?.includes('HOD')}
                             onClick={async () => {
                               if (activeModuleId) {
                                 await updateModule(activeModuleId, { isExitLevel: true });
@@ -665,7 +664,7 @@ export default function FileVault() {
                           </button>
                           <button
                             type="button"
-                            disabled={profile?.role !== 'HOD'}
+                            disabled={!profile?.roles?.includes('HOD')}
                             onClick={async () => {
                               if (activeModuleId) {
                                 await updateModule(activeModuleId, { isExitLevel: false });
@@ -682,7 +681,7 @@ export default function FileVault() {
                             NO
                           </button>
                         </div>
-                        {profile?.role !== 'HOD' ? (
+                        {!profile?.roles?.includes('HOD') ? (
                           <span className="text-[9px] text-slate-500 font-normal italic">(HOD only)</span>
                         ) : (
                           <span className="text-[9px] text-indigo-400 font-semibold">(HOD Adjust Setting)</span>

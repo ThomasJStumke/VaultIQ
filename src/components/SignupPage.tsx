@@ -42,20 +42,17 @@ export default function SignupPage({ onBackToLogin }: SignupPageProps) {
 
     setSubmitting(true);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // The chosen role travels in auth user_metadata; a DB trigger
+      // (handle_new_vaultiq_user) reads it and inserts the actual
+      // user_type row server-side — the very first account ever created
+      // is made SUPER_ADMIN there regardless of what's selected here.
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: { data: { role } },
       });
 
       if (signUpError) throw signUpError;
-
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({ id: data.user.id, email, role });
-        if (profileError) throw profileError;
-      }
 
       setSuccess(true);
     } catch (err) {

@@ -23,8 +23,8 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { Module } from '../types';
 import { filterModulesByScope } from '../permissions.config';
-import { subscribeToModules, addModule, updateModule, subscribeToUsers } from '../services/firebaseService';
-import { cn } from '../lib/utils';
+import { subscribeToModules, addModule, updateModule, subscribeToUsers } from '../services/dataService';
+import { cn, hasAnyRole } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Static mappings for lookup
@@ -257,12 +257,12 @@ export default function ModuleMapping() {
 
   // Sync state with selected simulated role values
   useEffect(() => {
-    if (profile?.role === 'HOD') {
+    if (profile?.roles?.includes('HOD')) {
       const hodDept = DEPARTMENTS.find(d => d.facultyId === 'FAI') || DEPARTMENTS[0];
       setSelectedDeptId(hodDept.id);
       setSelectedFacultyId(hodDept.facultyId);
       setNewDeptId(hodDept.id);
-    } else if (profile?.role === 'DEPUTY_DEAN' || profile?.role === 'EXECUTIVE_DEAN') {
+    } else if (profile?.roles?.includes('DEPUTY_DEAN') || profile?.roles?.includes('EXECUTIVE_DEAN')) {
       const deanFac = FACULTIES.find(f => f.id === 'FAI') || FACULTIES[0];
       setSelectedFacultyId(deanFac.id);
       const firstDept = DEPARTMENTS.find(d => d.facultyId === deanFac.id);
@@ -271,7 +271,7 @@ export default function ModuleMapping() {
         setNewDeptId(firstDept.id);
       }
     }
-  }, [profile?.role]);
+  }, [profile?.roles]);
 
   // Read pre-assigned lists
   const currentDeptPresets = PREASSIGNED_MODULES[newDeptId] || [];
@@ -282,7 +282,7 @@ export default function ModuleMapping() {
     setSuccessMsg('');
 
     // Ensure authorization
-    if (profile?.role !== 'HOD') {
+    if (!profile?.roles?.includes('HOD')) {
       setFormError('Only the Head of Department (HOD) is authorized to assign lecturers to module codes.');
       return;
     }
@@ -518,7 +518,7 @@ export default function ModuleMapping() {
     const matchesSearch = m.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           m.name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    if (profile?.role === 'HOD') {
+    if (profile?.roles?.includes('HOD')) {
       // HoD sees all modules in their specific department
       return m.departmentId === selectedDeptId && matchesSearch;
     } else {
@@ -563,7 +563,7 @@ export default function ModuleMapping() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {profile?.role === 'FACULTY_ADMIN' && (
+          {profile?.roles?.includes('FACULTY_ADMIN') && (
             <>
               <button 
                 onClick={() => {
@@ -587,7 +587,7 @@ export default function ModuleMapping() {
           )}
 
           {/* Action button based on rules: only HOD can assign lecturers to modules */}
-          {profile?.role === 'HOD' ? (
+          {profile?.roles?.includes('HOD') ? (
             <button 
               onClick={() => {
                 setEditingModuleId(null);
@@ -602,11 +602,11 @@ export default function ModuleMapping() {
             >
               <Plus className="w-4 h-4" /> Link Module Code
             </button>
-          ) : !['FACULTY_ADMIN', 'HOD'].includes(profile?.role || '') && (
+          ) : !hasAnyRole(profile?.roles, 'FACULTY_ADMIN', 'HOD') && (
             <div className="text-right">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Access Mode</p>
               <span className="text-xs font-extrabold text-[#6366f1] bg-[#6366f1]/10 border border-[#6366f1]/20 px-3 py-1.5 rounded-lg inline-block mt-1">
-                {profile?.role || 'VIEWER'} VIEW
+                {profile?.roles?.join('/') || 'VIEWER'} VIEW
               </span>
             </div>
           )}
@@ -614,7 +614,7 @@ export default function ModuleMapping() {
       </div>
 
       {/* Info card if Faculty Admin accesses module links */}
-      {profile?.role === 'FACULTY_ADMIN' && (
+      {profile?.roles?.includes('FACULTY_ADMIN') && (
         <div className="p-5 bg-gradient-to-r from-indigo-950/40 to-slate-900 border border-indigo-500/20 text-slate-300 rounded-2xl text-xs font-medium leading-relaxed space-y-2">
           <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
             <Building2 className="w-4 h-4 text-indigo-400" /> Faculty Administrator Curriculum Controls Active
@@ -1082,20 +1082,20 @@ export default function ModuleMapping() {
                     <span className="text-xs font-bold text-slate-300">Exit Level Module?</span>
                     <label className={cn(
                       "relative inline-flex items-center",
-                      profile?.role === 'HOD' ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+                      profile?.roles?.includes('HOD') ? "cursor-pointer" : "cursor-not-allowed opacity-50"
                     )}>
                       <input 
                         type="checkbox"
                         checked={newIsExitLevel}
                         onChange={(e) => setNewIsExitLevel(e.target.checked)}
-                        disabled={profile?.role !== 'HOD'}
+                        disabled={!profile?.roles?.includes('HOD')}
                         className="sr-only peer"
                       />
                       <div className="w-9 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:bg-white peer-checked:bg-indigo-600 peer-checked:after:border-indigo-500"></div>
                     </label>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                    {profile?.role === 'HOD'
+                    {profile?.roles?.includes('HOD')
                       ? "Set this flag to require both internal and external moderation reports."
                       : "Requires both internal and external moderation reports (Only HOD can toggle this)."}
                   </p>
@@ -1145,7 +1145,7 @@ export default function ModuleMapping() {
             <div className="space-y-4">
               <div>
                 <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Selected Faculty</label>
-                {profile?.role === 'HOD' ? (
+                {profile?.roles?.includes('HOD') ? (
                   <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-white uppercase tracking-wider">
                     {selectedFaculty?.name || 'Informatics & Design'}
                   </div>
@@ -1181,7 +1181,7 @@ export default function ModuleMapping() {
               {/* Department Selector */}
               <div>
                 <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Selected Department</label>
-                {profile?.role === 'HOD' ? (
+                {profile?.roles?.includes('HOD') ? (
                   <div className="px-4 py-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs font-extrabold text-indigo-400 uppercase tracking-wider flex items-center justify-between">
                     <span>{selectedDept?.name}</span>
                     <span className="text-[9px] bg-indigo-500/20 px-2 py-0.5 rounded text-indigo-300">HoD Room</span>
@@ -1215,7 +1215,7 @@ export default function ModuleMapping() {
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 font-bold uppercase tracking-wide">Role</span>
-                <span className="text-white font-black uppercase tracking-wider">{profile?.role}</span>
+                <span className="text-white font-black uppercase tracking-wider">{profile?.roles?.join(', ')}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 font-bold uppercase tracking-wide">Faculty</span>
@@ -1229,11 +1229,11 @@ export default function ModuleMapping() {
                 <span className="text-slate-500 font-bold uppercase tracking-wide">Access Action</span>
                 <span className={cn(
                   "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest",
-                  ['LECTURER', 'HOD'].includes(profile?.role || '') 
+                  hasAnyRole(profile?.roles, 'LECTURER', 'HOD') 
                     ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" 
                     : "bg-slate-800 text-slate-400 border border-white/5"
                 )}>
-                  {['LECTURER', 'HOD'].includes(profile?.role || '') ? 'Upload & View' : 'View Only'}
+                  {hasAnyRole(profile?.roles, 'LECTURER', 'HOD') ? 'Upload & View' : 'View Only'}
                 </span>
               </div>
             </div>
@@ -1323,7 +1323,7 @@ export default function ModuleMapping() {
                 <p className="text-slate-600 text-xs font-medium">
                   There are no modules linked to the {selectedDept?.name} department matching your criteria.
                 </p>
-                {['HOD', 'DEPUTY_DEAN', 'EXECUTIVE_DEAN'].includes(profile?.role || '') && (
+                {hasAnyRole(profile?.roles, 'HOD', 'DEPUTY_DEAN', 'EXECUTIVE_DEAN') && (
                   <button 
                     onClick={() => {
                       setIsAddingModule(true);
@@ -1356,7 +1356,7 @@ export default function ModuleMapping() {
                         </div>
 
                         {/* Edit Action */}
-                        {['HOD', 'DEPUTY_DEAN', 'EXECUTIVE_DEAN'].includes(profile?.role || '') && (
+                        {hasAnyRole(profile?.roles, 'HOD', 'DEPUTY_DEAN', 'EXECUTIVE_DEAN') && (
                           <button 
                             onClick={() => startEdit(m)}
                             className="p-2 bg-white/5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-indigo-600/20 text-slate-400 hover:text-indigo-400 transition"

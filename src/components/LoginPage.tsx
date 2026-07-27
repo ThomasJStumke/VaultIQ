@@ -1,5 +1,5 @@
-import React from 'react';
-import { ShieldCheck, LogIn, Database, Cpu, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShieldCheck, Database, Cpu, Lock, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { motion } from 'motion/react';
 
@@ -9,6 +9,23 @@ interface LoginPageProps {
 
 export default function LoginPage({ onShowSignup }: LoginPageProps) {
   const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign in.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col lg:flex-row font-sans relative overflow-hidden">
@@ -37,7 +54,7 @@ export default function LoginPage({ onShowSignup }: LoginPageProps) {
               The Next Frontier in <span className="text-indigo-400">Governance.</span>
             </motion.h2>
             <p className="text-slate-400 text-lg leading-relaxed font-medium">
-              A comprehensive academic compliance ecosystem powered by secure institutional records and Gemini AI document validation.
+              A comprehensive academic compliance ecosystem powered by secure institutional records.
             </p>
           </div>
         </div>
@@ -45,7 +62,7 @@ export default function LoginPage({ onShowSignup }: LoginPageProps) {
         <div className="grid grid-cols-2 gap-8">
           {[
             { icon: Database, title: 'Institutional Records', desc: 'Secure preservation of academic evidence.' },
-            { icon: Cpu, title: 'AI Validation', desc: 'Automated compliance checking for all uploads.' },
+            { icon: Cpu, title: 'Compliance Tracking', desc: 'Automated compliance checking for all uploads.' },
             { icon: Lock, title: 'Exam Security', desc: 'Bank-grade protection for assessment workflows.' },
             { icon: ShieldCheck, title: 'Audit Readiness', desc: 'Instant reporting for external moderators.' },
           ].map((feature, i) => (
@@ -86,34 +103,58 @@ export default function LoginPage({ onShowSignup }: LoginPageProps) {
             </p>
           </div>
 
-          <div className="space-y-6">
-            <button 
-              onClick={login}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold hover:bg-white/10 hover:border-white/20 transition-all group shadow-xl active:scale-95"
-            >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
-              Sign in with University Google Account
-            </button>
-
-            <div className="relative py-4 flex items-center gap-4">
-              <div className="flex-1 h-px bg-white/5" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Enterprise SSO</span>
-              <div className="flex-1 h-px bg-white/5" />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@university.ac.za"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+              />
             </div>
 
-            <div className="p-4 bg-slate-900/50 rounded-2xl border border-white/5">
-              <p className="text-[10px] text-slate-500 font-bold italic leading-relaxed uppercase tracking-tight">
-                All sessions are monitored and recorded for institutional audit readiness and compliance.
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+              />
+            </div>
+
+            {error && (
+              <p className="text-rose-400 text-xs font-bold bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-3">
+                {error}
               </p>
-            </div>
+            )}
 
             <button
-              onClick={onShowSignup}
-              className="w-full py-3 text-slate-400 font-bold text-sm hover:text-white transition-colors"
+              type="submit"
+              disabled={submitting}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 rounded-2xl text-white font-bold hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
             >
-              New here? Create an account
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Sign In
             </button>
-          </div>
+
+            <button
+              type="button"
+              onClick={onShowSignup}
+              className="w-full py-3 bg-white/5 border border-white/10 rounded-2xl text-slate-300 font-bold hover:bg-white/10 hover:border-white/20 transition-all active:scale-95"
+            >
+              Create an account
+            </button>
+          </form>
         </div>
 
         <footer className="mt-12 flex items-center gap-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">

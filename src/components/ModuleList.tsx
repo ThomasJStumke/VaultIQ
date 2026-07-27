@@ -14,16 +14,15 @@ import {
 } from 'lucide-react';
 import { cn, formatDate } from '../lib/utils';
 import { Module } from '../types';
-import { subscribeToModules, initializeSeedData } from '../services/firebaseService';
+import { subscribeToModules, initializeSeedData } from '../services/dataService';
 import EvidenceUploader from './EvidenceUploader';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
-import { mapUserRoleToRole, getPermission, filterModulesByScope } from '../permissions.config';
+import { getPermissionForRoles, filterModulesByScope } from '../permissions.config';
 
 export default function ModuleList() {
   const { profile } = useAuth();
-  const mappedRole = profile?.role ? mapUserRoleToRole(profile.role) : null;
-  const permission = mappedRole ? getPermission(mappedRole, 'My Modules') : { access: 'none' };
+  const permission = getPermissionForRoles(profile?.roles, 'My Modules');
   
   const canUpload = permission.access === 'upload_view';
   const canAssign = permission.access === 'assign_view';
