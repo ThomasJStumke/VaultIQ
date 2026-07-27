@@ -24,9 +24,11 @@ import {
   History,
   FileSpreadsheet,
   Sparkles,
+  Send,
   HelpCircle,
+  Bot
 } from 'lucide-react';
-import { subscribeToModules, subscribeToEvidence, uploadEvidenceMetadata, updateModuleCompliance } from '../services/dataService';
+import { subscribeToModules, subscribeToEvidence, uploadEvidenceMetadata, updateModuleCompliance } from '../services/supabaseService';
 import { useAuth } from '../hooks/useAuth';
 
 const REQUIREMENTS = [
@@ -62,6 +64,24 @@ export default function ComplianceHeatmap() {
   const [modules, setModules] = useState<ModuleWithEvidence[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // AI Quality Reporting Scribe State
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiReportResult, setAiReportResult] = useState<{
+    reportTitle: string;
+    scopedBoundary: string;
+    analysisSummary: string;
+    filteredModules: Array<{
+      code: string;
+      name: string;
+      requirement: string;
+      status: string;
+      valDate: string;
+    }>;
+    suggestedCsv: string;
+  } | null>(null);
 
   // Toggle for layout view of report center style
   const [isReportCenterOpen, setIsReportCenterOpen] = useState(false);
@@ -293,10 +313,10 @@ export default function ComplianceHeatmap() {
         moduleId: selectedCell.module.id,
         type: evType as any,
         storagePath: `evidence/${selectedCell.module.code}/${uploadingFile.name}`,
-        uploadedBy: user.id,
+        uploadedBy: user.uid,
         uploadedAt: new Date().toISOString(),
         aiValidationStatus: 'VALID',
-        aiFeedback: `Verified instantly by direct user override as ${profile?.roles?.join('/') || 'authorized user'}`
+        aiFeedback: `Verified instantly by direct user override as ${profile?.role || 'authorized user'}`
       });
 
       // 2. Adjust core module status to compliant
@@ -352,6 +372,54 @@ export default function ComplianceHeatmap() {
     document.body.removeChild(link);
   };
 
+  // Submit search query to the server-side AI Report Scribe
+  const handleAIScribeQuery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiPrompt.trim()) return;
+
+    setAiLoading(true);
+    setAiError('');
+    setAiReportResult(null);
+
+    try {
+      const response = await fetch('/api/generate-custom-report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          modules: modules,
+          departments: DEPARTMENTS
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to communicate with AI report writer agency');
+      }
+
+      const result = await response.json();
+      setAiReportResult(result);
+    } catch (err: any) {
+      console.error('AI Scribe Error:', err);
+      setAiError(err.message || 'The AI custom scribe was unable to digest the raw stats. Please re-trigger.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleDownloadCustomAIReport = (reportTitle: string, boundaryName: string, csvContent: string) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${reportTitle.replace(/\s+/g, '_')}_${boundaryName.replace(/\s+/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredModules = modules.filter(m => {
     const term = searchQuery.toLowerCase();
     return m.code.toLowerCase().includes(term) || m.name.toLowerCase().includes(term);
@@ -361,27 +429,27 @@ export default function ComplianceHeatmap() {
     switch (status) {
       case 'COMPLIANT':
         return {
-          wrapper: "bg-[#062017] hover:bg-[#093023] text-emerald-400 border-emerald-500/15 shadow-[inset_0_1px_1px_rgba(16,185,129,0.05)]",
-          dot: "bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.6)]",
+          wrapper: "bg-cell-success-bg hover:bg-cell-success-bg-hover text-status-success border-emerald-500/15 shadow-[inset_0_1px_1px_rgba(16,185,129,0.05)]",
+          dot: "bg-status-success shadow-[0_0_10px_rgba(16,185,129,0.6)]",
           label: "Compliant"
         };
       case 'PARTIAL':
         return {
-          wrapper: "bg-[#201409] hover:bg-[#2d1e10] text-amber-500 border-amber-500/15 shadow-[inset_0_1px_1px_rgba(245,158,11,0.05)]",
-          dot: "bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.6)]",
+          wrapper: "bg-cell-warning-bg hover:bg-cell-warning-bg-hover text-status-warning border-amber-500/15 shadow-[inset_0_1px_1px_rgba(245,158,11,0.05)]",
+          dot: "bg-status-warning shadow-[0_0_10px_rgba(245,158,11,0.6)]",
           label: "Partial / Pending"
         };
       case 'NON_COMPLIANT':
         return {
-          wrapper: "bg-[#240c15] hover:bg-[#331320] text-rose-500 border-rose-500/15 shadow-[inset_0_1px_1px_rgba(244,63,94,0.05)]",
-          dot: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.6)]",
+          wrapper: "bg-cell-danger-bg hover:bg-cell-danger-bg-hover text-status-danger border-rose-500/15 shadow-[inset_0_1px_1px_rgba(244,63,94,0.05)]",
+          dot: "bg-status-danger shadow-[0_0_10px_rgba(244,63,94,0.6)]",
           label: "Critical / Overdue"
         };
       case 'MISSING':
       default:
         return {
-          wrapper: "bg-[#13151b] hover:bg-[#1b1e25] text-slate-500 border-white/5",
-          dot: "bg-slate-700",
+          wrapper: "bg-cell-neutral-bg hover:bg-cell-neutral-bg-hover text-subtle-foreground border-border-subtle",
+          dot: "bg-surface-2",
           label: "No Evidence"
         };
     }
@@ -396,22 +464,22 @@ export default function ComplianceHeatmap() {
         </div>
         
         <div className="relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-subtle pb-6 mb-6">
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded text-[9px] font-black uppercase tracking-widest">
                   Governance Analytics Panel
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
                   Live Audit Extractor
                 </span>
               </div>
-              <h3 className="text-2xl font-black text-white tracking-tight uppercase mt-1">
+              <h3 className="text-2xl font-black text-foreground tracking-tight uppercase mt-1">
                 Institutional Reporting & Evidence Export Hub
               </h3>
-              <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mt-0.5">
-                Generate formal regulatory spreadsheets for senate audits
+              <p className="text-muted-foreground text-xs font-semibold uppercase tracking-widest mt-0.5">
+                Generate formal regulatory spreadsheets & consult AI scribe for senate audits
               </p>
             </div>
 
@@ -433,15 +501,15 @@ export default function ComplianceHeatmap() {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden space-y-8"
               >
-                <div className="grid grid-cols-1">
-                  {/* Ready-Made Direct Exports */}
-                  <div className="space-y-4 max-w-lg">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Left segment: Ready-Made Direct Exports */}
+                  <div className="lg:col-span-4 space-y-4">
                     <div>
-                      <h4 className="text-sm font-black text-white tracking-tight uppercase flex items-center gap-2">
+                      <h4 className="text-sm font-black text-foreground tracking-tight uppercase flex items-center gap-2">
                         <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                         AcaAudit Pre-Sets
                       </h4>
-                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-1">
+                      <p className="text-[11px] text-subtle-foreground font-medium leading-relaxed mt-1">
                         Select an institutional reporting node below to extract instantly stamped compliance statistics.
                       </p>
                     </div>
@@ -449,13 +517,13 @@ export default function ComplianceHeatmap() {
                     <div className="space-y-2.5">
                       <button 
                         onClick={() => handleDownloadCSV("Institutional Master Integrity Audit Checksheet", "University Whole Scopes", modules)}
-                        className="w-full p-4 bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/20 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+                        className="w-full p-4 bg-surface-tint hover:bg-emerald-500/10 border border-border-subtle hover:border-emerald-500/20 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
                       >
                         <div>
-                          <p className="text-xs font-black text-slate-200 group-hover:text-emerald-400 transition tracking-wide uppercase">Institutional Master Audit</p>
-                          <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">Scope: All Registered Syllabus Nodes</p>
+                          <p className="text-xs font-black text-foreground/90 group-hover:text-emerald-400 transition tracking-wide uppercase">Institutional Master Audit</p>
+                          <p className="text-[10px] text-subtle-foreground font-bold mt-0.5 uppercase tracking-wider">Scope: All Registered Syllabus Nodes</p>
                         </div>
-                        <Download className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition" />
+                        <Download className="w-4 h-4 text-subtle-foreground group-hover:text-emerald-400 transition" />
                       </button>
 
                       <button 
@@ -463,13 +531,13 @@ export default function ComplianceHeatmap() {
                           const list = modules.filter(m => m.departmentId === 'FAI_IT' || m.departmentId === 'FAI_IS');
                           handleDownloadCSV("Curriculum Gatekeeper Stat-Audit", "Faculty of Accounting & Informatics", list);
                         }}
-                        className="w-full p-4 bg-white/5 hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/20 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+                        className="w-full p-4 bg-surface-tint hover:bg-indigo-500/10 border border-border-subtle hover:border-indigo-500/20 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
                       >
                         <div>
-                          <p className="text-xs font-black text-slate-200 group-hover:text-indigo-400 transition tracking-wide uppercase">Accounting & Informatics</p>
-                          <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">Scope: School Faculty Level Stat</p>
+                          <p className="text-xs font-black text-foreground/90 group-hover:text-indigo-400 transition tracking-wide uppercase">Accounting & Informatics</p>
+                          <p className="text-[10px] text-subtle-foreground font-bold mt-0.5 uppercase tracking-wider">Scope: School Faculty Level Stat</p>
                         </div>
-                        <Download className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition" />
+                        <Download className="w-4 h-4 text-subtle-foreground group-hover:text-indigo-400 transition" />
                       </button>
 
                       <button 
@@ -477,24 +545,182 @@ export default function ComplianceHeatmap() {
                           const list = modules.filter(m => m.departmentId === 'FAI_AUD_TAX' || m.code.includes('AUD'));
                           handleDownloadCSV("Departmental Assurance performance sheet", "Department of Auditing & Taxation", list);
                         }}
-                        className="w-full p-4 bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/20 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
+                        className="w-full p-4 bg-surface-tint hover:bg-amber-500/10 border border-border-subtle hover:border-amber-500/20 rounded-2xl text-left transition flex items-center justify-between group cursor-pointer"
                       >
                         <div>
-                          <p className="text-xs font-black text-slate-200 group-hover:text-amber-400 transition tracking-wide uppercase">Auditing & Taxation Performance</p>
-                          <p className="text-[10px] text-slate-500 font-bold mt-0.5 uppercase tracking-wider">Scope: Auditor Focus Departmental Slice</p>
+                          <p className="text-xs font-black text-foreground/90 group-hover:text-amber-400 transition tracking-wide uppercase">Auditing & Taxation Performance</p>
+                          <p className="text-[10px] text-subtle-foreground font-bold mt-0.5 uppercase tracking-wider">Scope: Auditor Focus Departmental Slice</p>
                         </div>
-                        <Download className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition" />
+                        <Download className="w-4 h-4 text-subtle-foreground group-hover:text-amber-400 transition" />
                       </button>
                     </div>
 
-                    <div className="p-3.5 bg-slate-900/50 border border-white/5 rounded-2xl flex items-start gap-3">
-                      <HelpCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                    <div className="p-3.5 bg-surface-sunken border border-border-subtle rounded-2xl flex items-start gap-3">
+                      <HelpCircle className="w-4 h-4 text-subtle-foreground shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Regulatory Compliance Mandate</p>
-                        <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
+                        <p className="text-[10px] uppercase font-black text-muted-foreground tracking-wider">Regulatory Compliance Mandate</p>
+                        <p className="text-[9px] text-subtle-foreground font-medium leading-snug mt-0.5">
                           Each export dynamically registers the exact extraction date, metadata boundaries, and cryptographic verification stamps required by senate auditors.
                         </p>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Right segment: AI Quality Report Scribe */}
+                  <div className="lg:col-span-8 p-6 bg-surface-sunken border border-border-subtle rounded-3xl flex flex-col justify-between gap-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl">
+                          <Sparkles className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-foreground tracking-tight uppercase">AI Report Scribe & Butler Assistant</h4>
+                          <p className="text-[11px] text-muted-foreground font-medium leading-normal">
+                            Type what slice of compliance stats you need (e.g. "Draft study guides audit report for Information Technology" or "Non-compliant courses in Accounting"). Scribe will filter the data, summarize risks, and generate your custom export.
+                          </p>
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleAIScribeQuery} className="flex gap-2.5">
+                        <input 
+                          type="text" 
+                          placeholder='E.g., "Show me all missing mod reports in Accounting" or "Syllabus Audit CS modules"'
+                          className="flex-1 bg-surface-tint border border-border rounded-xl px-4 py-3 text-xs text-foreground placeholder:text-subtle-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition font-medium"
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                        />
+                        <button 
+                          type="submit"
+                          disabled={aiLoading || !aiPrompt.trim()}
+                          className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 text-foreground rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          {aiLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-foreground" />
+                          ) : (
+                            <Send className="w-3.5 h-3.5" />
+                          )}
+                          {aiLoading ? 'Scribing...' : 'Consult'}
+                        </button>
+                      </form>
+
+                      {/* Pill suggestions for fast prompting */}
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          'Syllabus Audit IT modules study guides',
+                          'Missing moderation reports in Accounting',
+                          'Overall critical compliance risk summary'
+                        ].map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            onClick={() => setAiPrompt(suggestion)}
+                            className="px-3 py-1.5 bg-surface-tint hover:bg-surface-tint-strong rounded-full text-[9px] font-bold text-muted-foreground hover:text-foreground transition cursor-pointer border border-border-subtle"
+                          >
+                            + {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Scribe Result Container */}
+                    <div className="flex-1 relative">
+                      {aiLoading && (
+                        <div className="py-12 flex flex-col items-center justify-center gap-2">
+                          <Loader2 className="w-7 h-7 text-indigo-400 animate-spin" />
+                          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                            Extracting Registry Ledger & Feeding Gemini-3.5-Flash...
+                          </p>
+                        </div>
+                      )}
+
+                      {aiError && (
+                        <div className="p-4 bg-rose-500/10 border border-rose-500/25 text-rose-400 rounded-2xl text-xs font-bold uppercase tracking-wide flex items-center gap-2 leading-relaxed">
+                          <ShieldAlert className="w-5 h-5 shrink-0" />
+                          <span>{aiError}</span>
+                        </div>
+                      )}
+
+                      {aiReportResult && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="border border-indigo-500/20 bg-indigo-500/5 rounded-2xl p-5 space-y-4"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/10 pb-3">
+                            <div>
+                              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Suggested Dynamic Report</p>
+                              <h5 className="text-sm font-black text-foreground tracking-tight uppercase mt-0.5">
+                                {aiReportResult.reportTitle}
+                              </h5>
+                              <p className="text-[9px] font-bold text-subtle-foreground uppercase mt-0.5 tracking-wider">
+                                Boundary Match: <span className="text-foreground/80 font-black">{aiReportResult.scopedBoundary}</span> • Date Extracted: <span className="text-foreground/80 font-black">{new Date().toLocaleDateString('en-GB')}</span>
+                              </p>
+                            </div>
+                            
+                            <button
+                              onClick={() => handleDownloadCustomAIReport(aiReportResult.reportTitle, aiReportResult.scopedBoundary, aiReportResult.suggestedCsv)}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-foreground rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center gap-1.5 shrink-0 cursor-pointer border border-border"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Export CSV Sheet
+                            </button>
+                          </div>
+
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest italic">AI Quality Analysis overview</p>
+                            <p className="text-xs text-foreground/80 font-medium leading-relaxed">
+                              {aiReportResult.analysisSummary}
+                            </p>
+                          </div>
+
+                          {/* Mini Suggested Data Grid preview */}
+                          <div className="space-y-1.5 pt-1">
+                            <p className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest">Filtered Stats Preview ({aiReportResult.filteredModules?.length || 0} nodes)</p>
+                            
+                            <div className="max-h-[120px] overflow-y-auto border border-border-subtle rounded-xl bg-surface-sunken text-[10px]">
+                              {aiReportResult.filteredModules?.length > 0 ? (
+                                <table className="w-full text-left font-sans text-muted-foreground">
+                                  <thead className="bg-surface-tint text-[9px] font-black text-subtle-foreground uppercase tracking-wider">
+                                    <tr>
+                                      <th className="p-2">Code</th>
+                                      <th className="p-2">File Requirement</th>
+                                      <th className="p-2">Live Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-white/5 font-semibold">
+                                    {aiReportResult.filteredModules.map((item, idx) => (
+                                      <tr key={idx} className="hover:bg-foreground/[0.02]">
+                                        <td className="p-2 font-black text-foreground/80 tracking-tight">{item.code}</td>
+                                        <td className="p-2 uppercase text-[9px]">{item.requirement || 'General'}</td>
+                                        <td className="p-2">
+                                          <span className={cn(
+                                            "inline-block w-1.5 h-1.5 rounded-full mr-1.5",
+                                            item.status === 'COMPLIANT' ? 'bg-emerald-400' :
+                                            item.status === 'PARTIAL' ? 'bg-amber-400' : 'bg-rose-500'
+                                          )} />
+                                          <span className="uppercase text-[9px] font-black">{item.status}</span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <div className="p-4 text-center text-subtle-foreground font-black uppercase text-[10px]">
+                                  No modules flagged in filtering window
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {!aiLoading && !aiError && !aiReportResult && (
+                        <div className="h-full flex flex-col items-center justify-center p-8 border border-dashed border-border-subtle rounded-2xl bg-foreground/[0.01]">
+                          <Bot className="w-8 h-8 text-subtle-foreground mb-2 animate-bounce" style={{ fill: 'none' }} />
+                          <p className="text-[10px] font-extrabold text-subtle-foreground uppercase tracking-widest text-center">
+                            Waiting for Scribe prompting...
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -506,21 +732,21 @@ export default function ComplianceHeatmap() {
 
       <div className="glass-card overflow-hidden">
         {/* Title & Filter Bar */}
-        <div className="p-6 md:p-8 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div className="p-6 md:p-8 border-b border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div>
-            <h4 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+            <h4 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
               <Building2 className="w-5 h-5 text-indigo-400" />
               Departmental <span className="text-indigo-500">Compliance Heatmap</span>
             </h4>
-            <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mt-1">Cross-module integrity mapping & direct document access</p>
+            <p className="text-muted-foreground text-xs font-semibold uppercase tracking-widest mt-1">Cross-module integrity mapping & direct document access</p>
           </div>
 
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle-foreground" />
             <input 
               type="text" 
               placeholder="Search syllabus module code..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white font-bold placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              className="w-full bg-surface-tint border border-border rounded-xl pl-11 pr-4 py-2.5 text-xs text-foreground font-bold placeholder:text-subtle-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -532,9 +758,9 @@ export default function ComplianceHeatmap() {
           <div className="p-6 md:p-8 min-w-[850px]">
             {/* Header row */}
             <div className="grid grid-cols-[160px_repeat(5,1fr)] gap-3 mb-5">
-              <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center pl-2">Syllabus Node</div>
+              <div className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest flex items-center pl-2">Syllabus Node</div>
               {REQUIREMENTS.map((req) => (
-                <div key={req} className="text-center font-black text-[10px] text-slate-400 uppercase tracking-[0.15em] px-2 py-1.5 bg-white/[0.01] border border-white/5 rounded-lg">
+                <div key={req} className="text-center font-black text-[10px] text-muted-foreground uppercase tracking-[0.15em] px-2 py-1.5 bg-foreground/[0.01] border border-border-subtle rounded-lg">
                   {req}
                 </div>
               ))}
@@ -543,11 +769,11 @@ export default function ComplianceHeatmap() {
             {loading ? (
               <div className="py-20 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Subscribed to VaultIQ records...</p>
+                <p className="text-xs font-bold text-subtle-foreground uppercase tracking-wider">Subscribed to VaultIQ records...</p>
               </div>
             ) : filteredModules.length === 0 ? (
-              <div className="py-16 text-center border border-dashed border-white/5 rounded-2xl bg-white/[0.01]">
-                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">No matching modules registered</p>
+              <div className="py-16 text-center border border-dashed border-border-subtle rounded-2xl bg-foreground/[0.01]">
+                <p className="text-sm font-bold text-subtle-foreground uppercase tracking-wider">No matching modules registered</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -555,8 +781,8 @@ export default function ComplianceHeatmap() {
                   <div key={module.id} className="grid grid-cols-[160px_repeat(5,1fr)] gap-3 group items-center">
                     {/* Module Code Cell */}
                     <div className="pl-2">
-                      <p className="text-xs font-black text-slate-300 group-hover:text-indigo-400 transition cursor-default tracking-tight uppercase">{module.code}</p>
-                      <p className="text-[9px] font-bold text-slate-500 group-hover:text-slate-400 transition overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px]">{module.name}</p>
+                      <p className="text-xs font-black text-foreground/80 group-hover:text-indigo-400 transition cursor-default tracking-tight uppercase">{module.code}</p>
+                      <p className="text-[9px] font-bold text-subtle-foreground group-hover:text-muted-foreground transition overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px]">{module.name}</p>
                     </div>
 
                     {REQUIREMENTS.map((req) => {
@@ -579,7 +805,7 @@ export default function ComplianceHeatmap() {
                             {/* Top row: Indicator dot and status text */}
                             <div className="flex items-center gap-1.5 w-full">
                               <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", config.dot)} />
-                              <span className="text-[7.5px] font-black uppercase tracking-wider text-slate-300">
+                              <span className="text-[7.5px] font-black uppercase tracking-wider text-foreground/80">
                                 {config.label}
                               </span>
                               {hasFile && (
@@ -592,11 +818,11 @@ export default function ComplianceHeatmap() {
                             {/* Center: document filename (direct clickable connection) */}
                             <div className="w-full mt-1.5">
                               {hasFile ? (
-                                <span className="text-[9px] font-bold text-white block truncate underline decoration-dotted decoration-indigo-400/40 group-hover/cell:decoration-white transition-all leading-tight">
+                                <span className="text-[9px] font-bold text-foreground block truncate underline decoration-dotted decoration-indigo-400/40 group-hover/cell:decoration-white transition-all leading-tight">
                                   {docInfo.title}
                                 </span>
                               ) : (
-                                <span className="text-[8px] font-bold text-slate-600 block italic leading-tight">
+                                <span className="text-[8px] font-bold text-subtle-foreground block italic leading-tight">
                                   + Upload Evidence
                                 </span>
                               )}
@@ -607,13 +833,13 @@ export default function ComplianceHeatmap() {
                           </motion.button>
 
                           {/* Interactive Tooltip showing validation details */}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-[9px] font-bold text-slate-300 opacity-0 group-hover/cell:opacity-100 pointer-events-none transition duration-200 z-50 whitespace-nowrap shadow-2xl space-y-1">
-                            <p className="text-white font-black uppercase tracking-wider">{module.code} — {req}</p>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-surface border border-border rounded-xl text-[9px] font-bold text-foreground/80 opacity-0 group-hover/cell:opacity-100 pointer-events-none transition duration-200 z-50 whitespace-nowrap shadow-2xl space-y-1">
+                            <p className="text-foreground font-black uppercase tracking-wider">{module.code} — {req}</p>
                             <div className="flex items-center gap-1.5">
                               <span className={cn("w-1.5 h-1.5 rounded-full", config.dot)} />
-                              <span className="uppercase text-slate-400 font-extrabold">{config.label}</span>
+                              <span className="uppercase text-muted-foreground font-extrabold">{config.label}</span>
                             </div>
-                            <p className="text-[8px] text-slate-500 font-medium">Click to access security audit node</p>
+                            <p className="text-[8px] text-subtle-foreground font-medium">Click to access security audit node</p>
                           </div>
                         </div>
                       );
@@ -626,14 +852,14 @@ export default function ComplianceHeatmap() {
         </div>
 
         {/* Decorative Interactive Legend */}
-        <div className="p-6 border-t border-white/5 bg-white/[0.01] flex flex-wrap justify-between items-center gap-6">
+        <div className="p-6 border-t border-border-subtle bg-foreground/[0.01] flex flex-wrap justify-between items-center gap-6">
           <div className="flex flex-wrap items-center gap-6">
             <LegendItem label="Compliant" color="bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             <LegendItem label="Partial / Pending" color="bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
             <LegendItem label="Critical / Overdue" color="bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
-            <LegendItem label="No Evidence" color="bg-slate-700" />
+            <LegendItem label="No Evidence" color="bg-surface-2" />
           </div>
-          <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest italic">
+          <div className="text-[9px] font-black text-subtle-foreground uppercase tracking-widest italic">
             VaultIQ Registry Hub • Real-Time Database Connection Active
           </div>
         </div>
@@ -646,7 +872,7 @@ export default function ComplianceHeatmap() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay backdrop-blur-md"
           >
             <motion.div 
               initial={{ scale: 0.95, y: 20 }}
@@ -657,7 +883,7 @@ export default function ComplianceHeatmap() {
               <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50 animate-pulse" />
               
               {/* Header */}
-              <div className="p-6 md:p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
+              <div className="p-6 md:p-8 border-b border-border-subtle flex items-center justify-between bg-foreground/[0.01]">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded text-[9px] font-black uppercase tracking-widest">
@@ -669,17 +895,17 @@ export default function ComplianceHeatmap() {
                       </span>
                     )}
                   </div>
-                  <h3 className="text-2xl font-black text-white tracking-tight uppercase">
+                  <h3 className="text-2xl font-black text-foreground tracking-tight uppercase">
                     {selectedCell.module.code} — {selectedCell.reqName}
                   </h3>
-                  <p className="text-[10px] text-slate-550 font-extrabold uppercase tracking-widest mt-0.5">
+                  <p className="text-[10px] text-subtle-foreground font-extrabold uppercase tracking-widest mt-0.5">
                     Affiliation Department ID: <span className="text-indigo-400">{selectedCell.module.departmentId}</span>
                   </p>
                 </div>
                 
                 <button 
                   onClick={() => setSelectedCell(null)} 
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition duration-200 text-slate-400 hover:text-white"
+                  className="p-3 bg-surface-tint hover:bg-surface-tint-strong rounded-xl transition duration-200 text-muted-foreground hover:text-foreground"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -689,43 +915,43 @@ export default function ComplianceHeatmap() {
               <div className="grid grid-cols-1 lg:grid-cols-12 max-h-[80vh] overflow-y-auto">
                 
                 {/* Visual Metadata Panel */}
-                <div className="lg:col-span-4 p-6 md:p-8 border-b lg:border-b-0 lg:border-r border-white/5 bg-white/[0.01] flex flex-col justify-between gap-8">
+                <div className="lg:col-span-4 p-6 md:p-8 border-b lg:border-b-0 lg:border-r border-border-subtle bg-foreground/[0.01] flex flex-col justify-between gap-8">
                   <div className="space-y-6">
                     <div>
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">File Signature Hash</p>
-                      <div className="p-3 bg-slate-900 border border-white/5 rounded-xl text-[9px] font-mono font-bold text-slate-400 select-all break-all leading-tight">
+                      <p className="text-[9px] font-black text-subtle-foreground uppercase tracking-widest mb-1 italic">File Signature Hash</p>
+                      <div className="p-3 bg-surface border border-border-subtle rounded-xl text-[9px] font-mono font-bold text-muted-foreground select-all break-all leading-tight">
                         {getDocumentContent(selectedCell.module, selectedCell.reqName).hash}
                       </div>
                     </div>
 
                     <div>
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Quality Assurer Stamp</p>
-                      <p className="text-xs font-extrabold text-slate-200 bg-white/5 border border-white/5 px-3 py-2 rounded-xl flex items-center gap-2">
+                      <p className="text-[9px] font-black text-subtle-foreground uppercase tracking-widest mb-1 italic">Quality Assurer Stamp</p>
+                      <p className="text-xs font-extrabold text-foreground/90 bg-surface-tint border border-border-subtle px-3 py-2 rounded-xl flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
                         {getDocumentContent(selectedCell.module, selectedCell.reqName).verifier}
                       </p>
                     </div>
 
                     <div>
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Retention Clock Cycle</p>
-                      <p className="text-xs font-bold text-slate-450 flex items-center gap-2">
+                      <p className="text-[9px] font-black text-subtle-foreground uppercase tracking-widest mb-1 italic">Retention Clock Cycle</p>
+                      <p className="text-xs font-bold text-muted-foreground flex items-center gap-2">
                         <Clock className="w-4 h-4 text-amber-500" />
                         3Y Regulatory Auditing Retained
                       </p>
                     </div>
 
-                    <div className="border-t border-white/5 pt-4 space-y-2">
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest italic">Compliance Level</p>
+                    <div className="border-t border-border-subtle pt-4 space-y-2">
+                      <p className="text-[9px] font-black text-subtle-foreground uppercase tracking-widest italic">Compliance Level</p>
                       <div className="flex items-center gap-2">
                         <span className={cn(
                           "w-2 h-2 rounded-full",
                           getCellConfig(selectedCell.status).dot
                         )} />
-                        <span className="text-xs font-black uppercase text-white tracking-widest">
+                        <span className="text-xs font-black uppercase text-foreground tracking-widest">
                           {getCellConfig(selectedCell.status).label}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                      <p className="text-xs text-muted-foreground font-medium leading-relaxed">
                         Evaluated and logged into institutional database. Any change triggers compliance re-audit protocols.
                       </p>
                     </div>
@@ -737,10 +963,10 @@ export default function ComplianceHeatmap() {
                       <button 
                         onClick={() => handleSimulateDownload(getDocumentContent(selectedCell.module, selectedCell.reqName).title)}
                         disabled={isDownloading}
-                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2 active:scale-95 border border-white/5 disabled:opacity-50 select-none cursor-pointer"
+                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-foreground rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2 active:scale-95 border border-border-subtle disabled:opacity-50 select-none cursor-pointer"
                       >
                         {isDownloading ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          <Loader2 className="w-4 h-4 animate-spin text-foreground" />
                         ) : downloadSuccess ? (
                           <Check className="w-4 h-4 text-emerald-300" />
                         ) : (
@@ -759,15 +985,15 @@ export default function ComplianceHeatmap() {
                 </div>
 
                 {/* PDF Document Visual Page Panel */}
-                <div className="lg:col-span-8 p-6 md:p-8 bg-slate-900/50 flex flex-col justify-between">
+                <div className="lg:col-span-8 p-6 md:p-8 bg-surface-sunken flex flex-col justify-between">
                   {selectedCell.status === 'MISSING' ? (
                     /* Inline Evidence Ingestion Portal */
                     <div className="h-full flex flex-col justify-center items-center py-10 px-4 min-h-[400px]">
                       <div className="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400 mb-4 animate-pulse">
                         <Upload className="w-7 h-7" />
                       </div>
-                      <h4 className="text-lg font-black text-white tracking-tight uppercase">Upload Compliance Evidence</h4>
-                      <p className="text-slate-400 text-xs text-center max-w-sm mt-1 mb-8 leading-relaxed">
+                      <h4 className="text-lg font-black text-foreground tracking-tight uppercase">Upload Compliance Evidence</h4>
+                      <p className="text-muted-foreground text-xs text-center max-w-sm mt-1 mb-8 leading-relaxed">
                         To satisfy the compliance deficiency for <span className="text-indigo-400 font-bold">{selectedCell.module.code} / {selectedCell.reqName}</span>, transmit the certified academic PDF document.
                       </p>
 
@@ -775,7 +1001,7 @@ export default function ComplianceHeatmap() {
                         <div 
                           className={cn(
                             "border border-dashed rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition",
-                            uploadingFile ? "border-indigo-500 bg-indigo-500/5 text-white" : "border-white/10 hover:border-white/30 bg-white/5"
+                            uploadingFile ? "border-indigo-500 bg-indigo-500/5 text-foreground" : "border-border hover:border-foreground/30 bg-surface-tint"
                           )}
                           onClick={() => document.getElementById('heatmap-file-picker')?.click()}
                         >
@@ -792,11 +1018,11 @@ export default function ComplianceHeatmap() {
                               }
                             }}
                           />
-                          <FileText className="w-8 h-8 text-slate-500 mb-2" />
+                          <FileText className="w-8 h-8 text-subtle-foreground mb-2" />
                           <p className="text-xs font-bold text-center">
                             {uploadingFile ? uploadingFile.name : 'Select or Browse certified PDF'}
                           </p>
-                          <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mt-1">Certified size max 10MB</p>
+                          <p className="text-[9px] text-subtle-foreground uppercase font-black tracking-widest mt-1">Certified size max 10MB</p>
                         </div>
 
                         {uploadError && (
@@ -817,7 +1043,7 @@ export default function ComplianceHeatmap() {
                           <button 
                             type="submit"
                             disabled={uploadProgress}
-                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-2"
+                            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-foreground rounded-xl text-xs font-black uppercase tracking-widest transition flex items-center justify-center gap-2"
                           >
                             {uploadProgress ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -832,13 +1058,13 @@ export default function ComplianceHeatmap() {
                   ) : (
                     /* Elegant PDF simulator view */
                     <div className="flex flex-col h-full justify-between gap-6 min-h-[400px]">
-                      <div className="flex justify-between items-center bg-slate-900 border border-white/5 p-3 rounded-xl">
+                      <div className="flex justify-between items-center bg-surface border border-border-subtle p-3 rounded-xl">
                         <span className="text-[10px] font-black text-indigo-400 font-mono tracking-wider">{getDocumentContent(selectedCell.module, selectedCell.reqName).title}</span>
-                        <span className="text-[9px] uppercase font-black text-slate-500 bg-white/5 px-2 py-0.5 rounded border border-white/5">VaultIQ Reader v2.0</span>
+                        <span className="text-[9px] uppercase font-black text-subtle-foreground bg-surface-tint px-2 py-0.5 rounded border border-border-subtle">VaultIQ Reader v2.0</span>
                       </div>
 
                       {/* PDF Pages container */}
-                      <div className="flex-1 bg-slate-950 border border-white/5 rounded-2xl p-6 md:p-8 font-mono text-xs text-slate-350 leading-relaxed shadow-inner overflow-y-auto whitespace-pre-wrap relative max-h-[350px]">
+                      <div className="flex-1 bg-background border border-border-subtle rounded-2xl p-6 md:p-8 font-mono text-xs text-foreground/70 leading-relaxed shadow-inner overflow-y-auto whitespace-pre-wrap relative max-h-[350px]">
                         <div className="absolute top-4 right-4 p-2 bg-emerald-500/5 text-emerald-400 font-sans text-[8px] uppercase tracking-widest font-black rounded border border-emerald-500/20">
                           AI Verified SecurIQ
                         </div>
@@ -846,23 +1072,23 @@ export default function ComplianceHeatmap() {
                       </div>
 
                       {/* PDF Multi-page selector footer */}
-                      <div className="flex justify-between items-center border-t border-white/5 pt-4">
+                      <div className="flex justify-between items-center border-t border-border-subtle pt-4">
                         <button 
                           onClick={() => setReaderPage(p => Math.max(0, p - 1))}
                           disabled={readerPage === 0}
-                          className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider"
+                          className="px-3 py-2 bg-surface-tint hover:bg-surface-tint-strong rounded-lg text-muted-foreground hover:text-foreground transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider"
                         >
                           <ChevronLeft className="w-4 h-4" /> Next
                         </button>
                         
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <span className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest">
                           Page {readerPage + 1} of {getDocumentContent(selectedCell.module, selectedCell.reqName).pages.length}
                         </span>
 
                         <button 
                           onClick={() => setReaderPage(p => Math.min(getDocumentContent(selectedCell.module, selectedCell.reqName).pages.length - 1, p + 1))}
                           disabled={readerPage === getDocumentContent(selectedCell.module, selectedCell.reqName).pages.length - 1}
-                          className="px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider"
+                          className="px-3 py-2 bg-surface-tint hover:bg-surface-tint-strong rounded-lg text-muted-foreground hover:text-foreground transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider"
                         >
                           Prev <ChevronRight className="w-4 h-4" />
                         </button>
@@ -885,7 +1111,7 @@ function LegendItem({ label, color }: { label: string; color: string }) {
   return (
     <div className="flex items-center gap-2.5">
       <div className={cn("w-3.5 h-3.5 rounded-md", color)} />
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{label}</span>
     </div>
   );
 }

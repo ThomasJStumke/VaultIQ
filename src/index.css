@@ -6,9 +6,158 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ---------------------------------------------------------------------------
+ * Design tokens. Every color used across the app should resolve through one
+ * of these CSS variables rather than a literal Tailwind color, so a single
+ * edit here (or the light-theme override block below) reaches every
+ * component. Do not hard-code colors in components -- add or reuse a token.
+ * ------------------------------------------------------------------------ */
+:root {
+  /* dark (default) */
+  --background: #020617;
+  --surface: #0f172a;
+  --surface-2: #1e293b;
+  --surface-tint: rgba(255, 255, 255, 0.05);
+  --surface-tint-strong: rgba(255, 255, 255, 0.10);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --foreground: #ffffff;
+  --muted-foreground: #94a3b8;
+  --subtle-foreground: #64748b;
+  --overlay: rgba(2, 6, 23, 0.75);
+  --surface-sunken: rgba(2, 6, 23, 0.35);
+  --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+
+  --status-success: #34d399;
+  --status-warning: #fbbf24;
+  --status-danger: #f87171;
+  --status-info: #60a5fa;
+  --status-ai: #a78bfa;
+
+  /* Heatmap/status cell backgrounds (e.g. ComplianceHeatmap grid) -- deep
+   * tinted panels in dark mode, pale tinted panels in light mode, so the
+   * cell itself (not just its text) stays theme-appropriate. */
+  --cell-success-bg: #062017;
+  --cell-success-bg-hover: #093023;
+  --cell-warning-bg: #201409;
+  --cell-warning-bg-hover: #2d1e10;
+  --cell-danger-bg: #240c15;
+  --cell-danger-bg-hover: #331320;
+  --cell-neutral-bg: #13151b;
+  --cell-neutral-bg-hover: #1b1e25;
+
+  /* Palette-shade overrides: every existing text-emerald-400/text-amber-400/
+   * text-rose-400/text-red-400/text-indigo-400 (icons, links, solid status
+   * text) across the whole app automatically resolves through these instead
+   * of Tailwind's static defaults, so light mode gets accessible contrast
+   * without touching hundreds of individual call sites. Only the -400 shade
+   * is overridden -- low-opacity -500 tinted badge backgrounds are left at
+   * their default value since they're theme-resilient as-is. */
+  --accent-400: #818cf8;
+  --emerald-400: #34d399;
+  --amber-400: #fbbf24;
+  --red-400: #f87171;
+  --rose-400: #fb7185;
+
+  --accent-300: #a5b4fc;
+  --emerald-300: #6ee7b7;
+  --amber-300: #fcd34d;
+  --rose-300: #fda4af;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-tint: rgba(15, 23, 42, 0.035);
+  --surface-tint-strong: rgba(15, 23, 42, 0.07);
+  --border: rgba(15, 23, 42, 0.10);
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --foreground: #0f172a;
+  --muted-foreground: #475569;
+  --subtle-foreground: #64748b;
+  --overlay: rgba(100, 116, 139, 0.35);
+  --surface-sunken: rgba(15, 23, 42, 0.045);
+  --card-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
+
+  --status-success: #059669;
+  --status-warning: #d97706;
+  --status-danger: #dc2626;
+  --status-info: #2563eb;
+  --status-ai: #7c3aed;
+
+  --accent-400: #4f46e5;
+  --emerald-400: #059669;
+  --amber-400: #d97706;
+  --red-400: #dc2626;
+  --rose-400: #e11d48;
+
+  --accent-300: #4338ca;
+  --emerald-300: #047857;
+  --amber-300: #b45309;
+  --rose-300: #be123c;
+
+  --cell-success-bg: #ecfdf5;
+  --cell-success-bg-hover: #d1fae5;
+  --cell-warning-bg: #fffbeb;
+  --cell-warning-bg-hover: #fef3c7;
+  --cell-danger-bg: #fef2f2;
+  --cell-danger-bg-hover: #fee2e2;
+  --cell-neutral-bg: #f1f5f9;
+  --cell-neutral-bg-hover: #e2e8f0;
+
+  color-scheme: light;
+}
+
+/* Exposes the variables above as real Tailwind utilities: bg-background,
+ * text-foreground, border-border, text-status-success, etc. */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-tint: var(--surface-tint);
+  --color-surface-tint-strong: var(--surface-tint-strong);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-overlay: var(--overlay);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-danger: var(--status-danger);
+  --color-status-info: var(--status-info);
+  --color-status-ai: var(--status-ai);
+
+  --color-cell-success-bg: var(--cell-success-bg);
+  --color-cell-success-bg-hover: var(--cell-success-bg-hover);
+  --color-cell-warning-bg: var(--cell-warning-bg);
+  --color-cell-warning-bg-hover: var(--cell-warning-bg-hover);
+  --color-cell-danger-bg: var(--cell-danger-bg);
+  --color-cell-danger-bg-hover: var(--cell-danger-bg-hover);
+  --color-cell-neutral-bg: var(--cell-neutral-bg);
+  --color-cell-neutral-bg-hover: var(--cell-neutral-bg-hover);
+
+  /* Overrides Tailwind's built-in palette shades app-wide -- see the comment
+   * in the :root block above. */
+  --color-indigo-400: var(--accent-400);
+  --color-emerald-400: var(--emerald-400);
+  --color-amber-400: var(--amber-400);
+  --color-red-400: var(--red-400);
+  --color-rose-400: var(--rose-400);
+
+  --color-indigo-300: var(--accent-300);
+  --color-emerald-300: var(--emerald-300);
+  --color-amber-300: var(--amber-300);
+  --color-rose-300: var(--rose-300);
+}
+
 @layer base {
   body {
-    @apply font-sans antialiased bg-slate-950 text-slate-200 overflow-hidden selection:bg-indigo-500/30;
+    @apply font-sans antialiased bg-background text-foreground overflow-hidden selection:bg-indigo-500/30 transition-colors duration-300;
   }
 
   /* Custom Glass Scrollbars */
@@ -20,21 +169,22 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+    @apply bg-surface-tint-strong rounded-full hover:bg-border transition-colors;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)] transition-all duration-300;
+    @apply bg-surface-tint backdrop-blur-xl border border-border rounded-2xl p-6 transition-all duration-300;
+    box-shadow: var(--card-shadow);
   }
 
   .glass-header {
-    @apply bg-slate-950/40 backdrop-blur-md border-b border-white/10;
+    @apply bg-background/40 backdrop-blur-md border-b border-border transition-colors duration-300;
   }
 
   .text-gradient {
-    @apply bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-foreground via-foreground/80 to-muted-foreground bg-clip-text text-transparent;
   }
 
   .glow-indigo {

@@ -70,7 +70,9 @@ export type Screen =
   | 'Location Association'
   | 'Strategic Dashboard'
   | 'Student Survey Reviews'
-  | 'Compliance Portfolios';
+  | 'Compliance Portfolios'
+  | 'Survey Management'
+  | 'Automated Reporting Engine';
 
 export const SCREENS: Screen[] = [
   'Dashboard',
@@ -90,6 +92,8 @@ export const SCREENS: Screen[] = [
   'Strategic Dashboard',
   'Student Survey Reviews',
   'Compliance Portfolios',
+  'Survey Management',
+  'Automated Reporting Engine',
 ];
 
 // ---------------------------------------------------------------------------
@@ -150,7 +154,9 @@ export const PERMISSIONS: Record<Screen, ScreenPermissions> = {
 
   'Dashboard': {
     'Lecturer':         { access: 'view' },
+    'Programme Coordinator': { access: 'view' },
     'HOD':               { access: 'view' },
+    'Faculty Admin':     { access: 'view' },
     'Deputy Dean':        { access: 'view' },
     'Executive Dean':      { access: 'view' },
     'DVC: T&L':            { access: 'view' },
@@ -168,6 +174,7 @@ export const PERMISSIONS: Record<Screen, ScreenPermissions> = {
 
   'My Modules': {
     'Lecturer': { access: 'upload_view' },
+    'Programme Coordinator': { access: 'upload_view' },
     'HOD':       { access: 'assign_view' },
   },
 
@@ -184,6 +191,11 @@ export const PERMISSIONS: Record<Screen, ScreenPermissions> = {
       note: 'Updates what should be submitted based on CQPA guidelines, ' +
             'to ensure consistency across the institution.',
     },
+    'Deputy Dean':             { access: 'view' },
+    'Executive Dean':          { access: 'view' },
+    'DVC: T&L':                  { access: 'view' },
+    'CQPA':                      { access: 'view' },
+    'Auditor':                    { access: 'view' },
   },
 
   'Exam Vault': {
@@ -209,6 +221,8 @@ export const PERMISSIONS: Record<Screen, ScreenPermissions> = {
     'Deputy Dean':             { access: 'view', note: 'Sends alerts at 2 weeks overdue.' },
     'Executive Dean':           { access: 'view', note: 'Sends alerts at 4 weeks overdue.' },
     'DVC: T&L':                   { access: 'view', note: 'Sends alerts at 6 weeks overdue.' },
+    'CQPA':                       { access: 'view', note: 'Can monitor system quality alerts.' },
+    'Auditor':                     { access: 'view', note: 'Can view audit notifications.' },
   },
 
   'Compliance Engine': {
@@ -315,6 +329,24 @@ export const PERMISSIONS: Record<Screen, ScreenPermissions> = {
     'CQPA':                   { access: 'view' },
     'Auditor':                 { access: 'view' },
     'Exams':                    { access: 'view_print' },
+  },
+
+  'Survey Management': {
+    'QPO': { access: 'assign_view' },
+  },
+
+  'Automated Reporting Engine': {
+    'Lecturer': { access: 'view' },
+    'Programme Coordinator': { access: 'view' },
+    'HOD': { access: 'view' },
+    'Faculty Admin': { access: 'view' },
+    'Deputy Dean': { access: 'view' },
+    'Executive Dean': { access: 'view' },
+    'DVC: T&L': { access: 'view' },
+    'CQPA': { access: 'view' },
+    'Auditor': { access: 'view' },
+    'QPO': { access: 'view' },
+    'Exams': { access: 'view' },
   },
 };
 

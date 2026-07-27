@@ -37,7 +37,7 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'REMINDER' | 'WARNING' | 'ESCALATION' | 'AUDIT';
+  type: 'REMINDER' | 'WARNING' | 'ESCALATION' | 'AUDIT' | 'COMPLIANCE';
   status: 'UNREAD' | 'READ';
   createdAt: string;
   moduleCode?: string;
@@ -125,8 +125,13 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
+  // Denormalized primary/first role -- kept for the many existing components
+  // that still do a single-role check (profile.role === 'HOD').
+  role: UserRole;
   // A user can hold many roles at once (see the `user_type` table). Page and
-  // action visibility is the union of what any of these roles grants.
+  // action visibility is the union of what any of these roles grants. New
+  // code (Platform Setup, RoleSwitcher, MainApp's nav union) should prefer
+  // this over the singular `role`.
   roles: UserRole[];
   facultyId?: string;
   departmentId?: string;
