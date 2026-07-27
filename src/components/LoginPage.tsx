@@ -3,7 +3,11 @@ import { ShieldCheck, LogIn, Database, Cpu, Lock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { motion } from 'motion/react';
 
-export default function LoginPage() {
+interface LoginPageProps {
+  onShowSignup: () => void;
+}
+
+export default function LoginPage({ onShowSignup }: LoginPageProps) {
   const { login } = useAuth();
 
   return (
@@ -102,6 +106,13 @@ export default function LoginPage() {
                 All sessions are monitored and recorded for institutional audit readiness and compliance.
               </p>
             </div>
+
+            <button
+              onClick={onShowSignup}
+              className="w-full py-3 text-slate-400 font-bold text-sm hover:text-white transition-colors"
+            >
+              New here? Create an account
+            </button>
           </div>
         </div>
 

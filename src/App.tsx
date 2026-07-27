@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import LoginPage from './components/LoginPage';
+import SignupPage from './components/SignupPage';
 import MainApp from './components/MainApp';
 import { ShieldAlert } from 'lucide-react';
 
 const Root: React.FC = () => {
   const { user, profile, loading } = useAuth();
+  const [showSignup, setShowSignup] = useState(false);
 
   if (loading) {
     return (
@@ -17,7 +19,11 @@ const Root: React.FC = () => {
   }
 
   if (!user || !profile) {
-    return <LoginPage />;
+    return showSignup ? (
+      <SignupPage onBackToLogin={() => setShowSignup(false)} />
+    ) : (
+      <LoginPage onShowSignup={() => setShowSignup(true)} />
+    );
   }
 
   return <MainApp />;
