@@ -45,8 +45,7 @@ function useImpersonationBootstrap() {
         if (!res.ok) throw new Error(body.error || 'Failed to start impersonation session');
 
         const { error: otpError } = await supabase.auth.verifyOtp({
-          email: body.email,
-          token: body.hashedToken,
+          token_hash: body.hashedToken,
           type: 'magiclink',
         });
         if (otpError) throw otpError;
