@@ -3,8 +3,19 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import * as dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
+
+// Service-role client for /api/impersonate: needs to bypass RLS to (a)
+// verify the caller is really SUPER_ADMIN and (b) mint a session for the
+// target user. Never expose SUPABASE_SERVICE_ROLE_KEY to the client bundle.
+const supabaseAdmin =
+  process.env.VITE_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
 
 async function startServer() {
   const app = express();
@@ -116,6 +127,79 @@ VaultIQ Institutional Administration
     } catch (error: any) {
       console.error("[VaultIQ EMAIL ERROR]:", error);
       res.status(500).json({ error: error.message || "Failed to dispatch welcome email" });
+    }
+  });
+
+  // "View as user" (Platform Setup > Users > eye icon): mints a real session
+  // for the target user so RLS enforces their actual permissions, not a
+  // cosmetic sidebar preview. Every use is logged to impersonation_log.
+  app.post("/api/impersonate", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(503).json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured on this server" });
+      }
+
+      const authHeader = req.headers.authorization || "";
+      const adminToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+      const { targetUserId } = req.body;
+      if (!adminToken || !targetUserId) {
+        return res.status(400).json({ error: "Missing admin token or targetUserId" });
+      }
+
+      const { data: callerAuth, error: callerErr } = await supabaseAdmin.auth.getUser(adminToken);
+      if (callerErr || !callerAuth.user) {
+        return res.status(401).json({ error: "Invalid or expired session" });
+      }
+
+      const { data: callerProfile, error: callerProfileErr } = await supabaseAdmin
+        .from("profiles")
+        .select("id, user_type(roles(name))")
+        .eq("auth_user_id", callerAuth.user.id)
+        .single();
+      if (callerProfileErr || !callerProfile) {
+        return res.status(403).json({ error: "Caller has no profile" });
+      }
+      const callerRoles: string[] = (callerProfile as any).user_type?.map((ut: any) => ut.roles?.name).filter(Boolean) ?? [];
+      if (!callerRoles.includes("SUPER_ADMIN")) {
+        return res.status(403).json({ error: "Only Super Admin can view as another user" });
+      }
+
+      const { data: targetProfile, error: targetErr } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email, display_name")
+        .eq("id", targetUserId)
+        .single();
+      if (targetErr || !targetProfile) {
+        return res.status(404).json({ error: "Target user not found" });
+      }
+      if (!targetProfile.email) {
+        return res.status(422).json({ error: "Target user has no email on file" });
+      }
+
+      const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+        type: "magiclink",
+        email: targetProfile.email,
+      });
+      if (linkErr || !linkData) {
+        return res.status(500).json({ error: linkErr?.message || "Failed to mint impersonation session" });
+      }
+
+      await supabaseAdmin.from("impersonation_log").insert({
+        admin_profile_id: callerProfile.id,
+        target_profile_id: targetProfile.id,
+        target_email: targetProfile.email,
+      });
+      console.log(
+        `[VaultIQ IMPERSONATE] admin_profile=${callerProfile.id} viewed_as=${targetProfile.id} (${targetProfile.email}) at ${new Date().toISOString()}`
+      );
+
+      return res.json({
+        email: targetProfile.email,
+        hashedToken: linkData.properties.hashed_token,
+      });
+    } catch (error: any) {
+      console.error("[VaultIQ IMPERSONATE ERROR]:", error);
+      res.status(500).json({ error: error.message || "Failed to mint impersonation session" });
     }
   });
 

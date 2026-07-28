@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, LayoutGrid, ToggleLeft, Users, Loader2, ShieldAlert } from 'lucide-react';
+import { Settings, LayoutGrid, ToggleLeft, Users, Loader2, ShieldAlert, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 import {
   getAllRoles,
   getAllPagesFull,
@@ -93,6 +94,17 @@ export default function PlatformSetup() {
     });
     if (assigned) await addRoleToUser(userId, roleId);
     else await removeRoleFromUser(userId, roleId);
+  };
+
+  const previewUser = async (userId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const adminToken = data.session?.access_token;
+    if (!adminToken) return;
+    // admin_token travels in the URL hash, not a query param -- fragments are
+    // never sent to the server or logged, unlike query strings. See
+    // App.tsx's useImpersonationBootstrap, which reads and then discards it.
+    const url = `${window.location.origin}/?impersonate=${userId}#admin_token=${encodeURIComponent(adminToken)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   if (loading) {
@@ -290,6 +302,7 @@ export default function PlatformSetup() {
               <thead>
                 <tr className="border-b border-white/5">
                   <th className="p-4 text-[10px] font-black text-slate-500 uppercase tracking-widest sticky left-0 bg-slate-950">User</th>
+                  <th className="p-4 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center">View</th>
                   {allRoles.map((r) => (
                     <th key={r.id} className="p-4 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center">
                       {r.label}
@@ -306,6 +319,16 @@ export default function PlatformSetup() {
                         {u.email}
                         {u.is_placeholder && ' · Invited'}
                       </p>
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={() => previewUser(u.id)}
+                        disabled={u.is_placeholder}
+                        title={u.is_placeholder ? "Can't preview a user who hasn't signed up yet" : `View as ${u.display_name}`}
+                        className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 hover:border-indigo-500/50 hover:text-indigo-400 disabled:opacity-30 disabled:cursor-not-allowed text-slate-400 mx-auto flex items-center justify-center transition"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </td>
                     {allRoles.map((r) => {
                       const checked = userRoleMatrix.has(`${u.id}:${r.id}`);
@@ -329,7 +352,7 @@ export default function PlatformSetup() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={allRoles.length + 1} className="p-8 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">
+                    <td colSpan={allRoles.length + 2} className="p-8 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">
                       No users yet.
                     </td>
                   </tr>
