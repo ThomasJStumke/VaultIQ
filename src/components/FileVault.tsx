@@ -1180,7 +1180,7 @@ export default function FileVault({ initialTab }: { initialTab?: 'explorer' | 't
             <div className="space-y-1">
               <h5 className="text-foreground text-xs font-black uppercase tracking-wider">Exam Upload Regulatory Ingestion Protocol</h5>
               <p className="text-muted-foreground text-[11px] font-medium leading-relaxed">
-                All exam-related materials (category <strong className="text-indigo-400">Assessments</strong>) uploaded to the Secure Vault are strictly restricted to **PDF format**. Furthermore, the documents must **NOT contain any front templates or cover/title pages** (preventing administrative identity exposures). VaultIQ automated parsers run instant heuristic alignments on upload.
+                All exam-related materials (category <strong className="text-indigo-400">Assessments</strong>) uploaded to the Secure Vault are strictly restricted to <strong>PDF format</strong>. Furthermore, the documents must <strong>NOT contain any front templates or cover/title pages</strong> (preventing administrative identity exposures). VaultIQ automated parsers run instant heuristic alignments on upload.
               </p>
             </div>
           </div>

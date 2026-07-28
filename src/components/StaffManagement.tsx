@@ -907,9 +907,9 @@ export default function StaffManagement() {
           <Shield className="w-4 h-4 text-indigo-400" /> Organizational Allocation Workflow Rule
         </h3>
         <p className="text-xs text-foreground/80 leading-relaxed max-w-4xl">
-          1. **Faculty Administrators** can assign **Staff members to their Departmental Affiliation**, register new staff records, and select their governing structural **Roles**.
+          1. <strong>Faculty Administrators</strong> can assign <strong>Staff members to their Departmental Affiliation</strong>, register new staff records, and select their governing structural <strong>Roles</strong>.
           <br />
-          2. **Heads of Departments (HOD)** are appointed to departments. Once assigned, they manage their department's pre-assigned course catalog and **allocate lecturers to module codes** inside the **Module Links** tab.
+          2. <strong>Heads of Departments (HOD)</strong> are appointed to departments. Once assigned, they manage their department's pre-assigned course catalog and <strong>allocate lecturers to module codes</strong> inside the <strong>Module Links</strong> tab.
         </p>
       </div>
 

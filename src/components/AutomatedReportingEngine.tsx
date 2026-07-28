@@ -1198,7 +1198,7 @@ export default function AutomatedReportingEngine() {
               Institutional Template Engine
             </span>
             <p className="text-xs text-muted-foreground">
-              Select any of the 12 institutional roles below. The reporting matrix compiles a highly tailored, role-specific viewpoint using the **same underlying live database state** without redundant data entry.
+              Select any of the 12 institutional roles below. The reporting matrix compiles a highly tailored, role-specific viewpoint using the <strong>same underlying live database state</strong> without redundant data entry.
             </p>
           </div>
           <div className="shrink-0 flex items-center gap-2">

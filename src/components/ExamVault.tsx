@@ -256,7 +256,7 @@ export default function ExamVault({ initialTab }: { initialTab?: 'dashboard' | '
           <ShieldAlert className="w-4.5 h-4.5 text-rose-500" /> Decentralized Assessment Oversight Protocol
         </h3>
         <p className="text-xs text-foreground/80 leading-relaxed max-w-4xl">
-          By security policy, examination papers are sealed inside this vault. Only the **Exams Office** role can decrypt audit parameters and securely retrieve linked modules' official exam papers for high-volume physical distribution and hardcopy printing.
+          By security policy, examination papers are sealed inside this vault. Only the <strong>Exams Office</strong> role can decrypt audit parameters and securely retrieve linked modules' official exam papers for high-volume physical distribution and hardcopy printing.
         </p>
       </div>
 

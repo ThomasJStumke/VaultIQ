@@ -209,7 +209,7 @@ export default function PublicSurveyResponse({ token }: PublicSurveyResponseProp
               <div className="space-y-3">
                 <h2 className="text-2xl font-black text-foreground uppercase tracking-wider">Evaluation Completed!</h2>
                 <p className="text-xs text-foreground/80 leading-relaxed max-w-xl mx-auto font-medium">
-                  Your feedback has been successfully registered. Under our strict **double-blind protocol**, this invitation link is now permanently deactivated. No record remains connecting your identity, email, or token to the responses submitted.
+                  Your feedback has been successfully registered. Under our strict <strong>double-blind protocol</strong>, this invitation link is now permanently deactivated. No record remains connecting your identity, email, or token to the responses submitted.
                 </p>
               </div>
 

@@ -1845,7 +1845,7 @@ export default function SurveyManagement({ initialQpoSubTab }: { initialQpoSubTa
                       <div className="space-y-1">
                         <p className="font-black text-foreground uppercase tracking-wider">Secure Double-Blind Architecture Enforced</p>
                         <p className="text-muted-foreground font-semibold leading-relaxed">
-                          Even though administrators can trace invitations here, **submitted responses** do not contain tokens, student references, or keys. De-activating an invitation and writing a response are processed as isolated writes.
+                          Even though administrators can trace invitations here, <strong>submitted responses</strong> do not contain tokens, student references, or keys. De-activating an invitation and writing a response are processed as isolated writes.
                         </p>
                       </div>
                     </div>

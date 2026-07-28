@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { 
   Building2, 
   Plus, 
@@ -221,24 +222,69 @@ export default function ModuleMapping() {
     document.body.removeChild(link);
   };
 
-  const handleDownloadModuleTemplateXLSX = () => {
-    const headers = ["Code", "Name", "AssessmentMode", "DepartmentCode", "LecturerEmailOrName", "ExitLevel"];
-    const exampleRow = [
-      "EXAMPLE - TAX402",
-      "EXAMPLE - Advanced Corporate Taxation",
-      "EXAMPLE - PROJECT_BASED",
-      "EXAMPLE - AUD_TAX",
-      "EXAMPLE - Dr. Alexander Wright",
-      "YES"
+  const handleDownloadModuleTemplateXLSX = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Syllabus Template");
+
+    worksheet.columns = [
+      { header: "Code", key: "code", width: 22 },
+      { header: "Name", key: "name", width: 34 },
+      { header: "AssessmentMode", key: "assessmentMode", width: 24 },
+      { header: "DepartmentCode", key: "departmentCode", width: 18 },
+      { header: "LecturerEmailOrName", key: "lecturerEmailOrName", width: 30 },
+      { header: "ExitLevel", key: "exitLevel", width: 14 },
     ];
-    const data = [headers, exampleRow];
+    worksheet.getRow(1).font = { bold: true };
+
+    worksheet.addRow({
+      code: "EXAMPLE - TAX402",
+      name: "EXAMPLE - Advanced Corporate Taxation",
+      assessmentMode: "PROJECT_BASED",
+      departmentCode: "AUD_TAX",
+      lecturerEmailOrName: "EXAMPLE - Dr. Alexander Wright",
+      exitLevel: "YES",
+    });
+
+    const TOTAL_ROWS = 11; // example row + 10 blank rows
     for (let i = 0; i < 10; i++) {
-      data.push(["", "", "", "", "", ""]);
+      worksheet.addRow({ code: "", name: "", assessmentMode: "", departmentCode: "", lecturerEmailOrName: "", exitLevel: "" });
     }
-    const worksheet = XLSX.utils.aoa_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Syllabus Template");
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+    const assessmentModeList = `"${ASSESSMENT_MODES.map(m => m.value).join(',')}"`;
+    const departmentCodeList = `"${DEPARTMENTS.map(d => d.code).join(',')}"`;
+    const exitLevelList = `"YES,NO"`;
+
+    for (let rowNum = 2; rowNum <= TOTAL_ROWS + 1; rowNum++) {
+      worksheet.getCell(`C${rowNum}`).dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: [assessmentModeList],
+        showErrorMessage: true,
+        errorStyle: 'stop',
+        errorTitle: 'Invalid Assessment Mode',
+        error: 'Please select a value from the dropdown list.',
+      };
+      worksheet.getCell(`D${rowNum}`).dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: [departmentCodeList],
+        showErrorMessage: true,
+        errorStyle: 'stop',
+        errorTitle: 'Invalid Department Code',
+        error: 'Please select a value from the dropdown list.',
+      };
+      worksheet.getCell(`F${rowNum}`).dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: [exitLevelList],
+        showErrorMessage: true,
+        errorStyle: 'stop',
+        errorTitle: 'Invalid Exit Level Value',
+        error: 'Please select YES or NO from the dropdown list.',
+      };
+    }
+
+    const excelBuffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -248,6 +294,7 @@ export default function ModuleMapping() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Form states
@@ -480,20 +527,18 @@ export default function ModuleMapping() {
       const parts = line.split(',');
       const code = parts[0]?.trim().toUpperCase();
       const name = parts[1]?.trim();
-      let mode = parts[2]?.trim().toUpperCase() || 'EXAM_BASED';
-      const deptCodeInput = parts[3]?.trim();
+      const mode = parts[2]?.trim().toUpperCase() || '';
+      const deptCodeInput = parts[3]?.trim() || '';
       const lecturerInput = parts[4]?.trim() || '';
-      const exitLevelInput = parts[5]?.trim().toUpperCase() || 'NO';
+      const exitLevelInput = parts[5]?.trim().toUpperCase() || '';
 
-      if (!['EXAM_BASED', 'CONTINUOUS_ASSESSMENT', 'PROJECT_BASED'].includes(mode)) {
-        mode = 'EXAM_BASED';
-      }
+      const isValidMode = ['EXAM_BASED', 'CONTINUOUS_ASSESSMENT', 'PROJECT_BASED'].includes(mode);
 
-      // Resolve department ID from code or name if provided
+      // Resolve department ID from code or name
       let resolvedDeptId = '';
       if (deptCodeInput) {
-        const foundDept = DEPARTMENTS.find(d => 
-          d.code.toUpperCase() === deptCodeInput.toUpperCase() || 
+        const foundDept = DEPARTMENTS.find(d =>
+          d.code.toUpperCase() === deptCodeInput.toUpperCase() ||
           d.id.toUpperCase() === deptCodeInput.toUpperCase()
         );
         if (foundDept) {
@@ -501,6 +546,7 @@ export default function ModuleMapping() {
         }
       }
 
+      const isValidExitLevel = exitLevelInput === 'YES' || exitLevelInput === 'NO';
       const isExitLevel = exitLevelInput === 'YES';
 
       // Parse lecturer name and email
@@ -556,13 +602,45 @@ export default function ModuleMapping() {
           status: 'INVALID',
           reason: 'Code is too short (min 3 chars)'
         });
+      } else if (!isValidMode) {
+        records.push({
+          code,
+          name,
+          assessmentMode: mode,
+          status: 'INVALID',
+          reason: 'Missing or invalid AssessmentMode (must be EXAM_BASED, CONTINUOUS_ASSESSMENT, or PROJECT_BASED)'
+        });
+      } else if (!deptCodeInput || !resolvedDeptId) {
+        records.push({
+          code,
+          name,
+          assessmentMode: mode,
+          status: 'INVALID',
+          reason: `Missing or unrecognized DepartmentCode${deptCodeInput ? ` ("${deptCodeInput}")` : ''}`
+        });
+      } else if (!lecturerInput) {
+        records.push({
+          code,
+          name,
+          assessmentMode: mode,
+          status: 'INVALID',
+          reason: 'Missing LecturerEmailOrName'
+        });
+      } else if (!isValidExitLevel) {
+        records.push({
+          code,
+          name,
+          assessmentMode: mode,
+          status: 'INVALID',
+          reason: 'Missing or invalid ExitLevel (must be YES or NO)'
+        });
       } else {
         records.push({
           code,
           name,
           assessmentMode: mode,
-          departmentId: resolvedDeptId || undefined,
-          lecturerName: lecturerInput || undefined,
+          departmentId: resolvedDeptId,
+          lecturerName: lecturerInput,
           isExitLevel,
           status: 'VALID',
           onboardingStatus,
@@ -782,7 +860,7 @@ export default function ModuleMapping() {
             <Building2 className="w-4 h-4 text-indigo-400" /> Faculty Administrator Curriculum Controls Active
           </h4>
           <p>
-            As a **Faculty Administrator**, you have permission to upload and create custom modules within different faculties and departments. Once created, the respective **Head of Department (HOD)** can allocate academic lecturers to those modules.
+            As a <strong className="text-foreground">Faculty Administrator</strong>, you have permission to upload and create custom modules within different faculties and departments. Once created, the respective <strong className="text-foreground">Head of Department (HOD)</strong> can allocate academic lecturers to those modules.
           </p>
         </div>
       )}
@@ -943,6 +1021,9 @@ export default function ModuleMapping() {
                     <p className="font-semibold text-[10px] normal-case text-foreground/80 mt-1 leading-relaxed">
                       Both templates (.csv & .xlsx) contain exactly ONE header-labeled instruction row prefixed with <code className="text-amber-400 font-mono font-bold">"EXAMPLE - "</code> to guide your data entry. You <span className="text-amber-300 font-black underline">MUST</span> completely delete this example row from your file before saving and importing your real module records.
                     </p>
+                    <p className="font-semibold text-[10px] normal-case text-foreground/80 mt-2 leading-relaxed">
+                      All six columns are <span className="text-amber-300 font-black underline">mandatory</span> for every row. Rows missing any field will be rejected during parsing.
+                    </p>
                   </div>
                 </div>
 
@@ -954,11 +1035,11 @@ export default function ModuleMapping() {
                   <br />
                   3. <strong className="text-foreground">AssessmentMode</strong>: Choose from <code className="text-indigo-300 font-mono text-[10px]">EXAM_BASED</code>, <code className="text-indigo-300 font-mono text-[10px]">CONTINUOUS_ASSESSMENT</code>, or <code className="text-indigo-300 font-mono text-[10px]">PROJECT_BASED</code>.
                   <br />
-                  4. <strong className="text-foreground">DepartmentCode</strong> (Optional): Target registry (e.g. <code className="font-mono text-emerald-400">AUD_TAX</code>, <code className="font-mono text-emerald-400">MGT_ACC</code>, <code className="font-mono text-emerald-400">FIN_ACC</code>, <code className="font-mono text-emerald-400">INF_TECH</code>, <code className="font-mono text-emerald-400">INF_SYS</code>, <code className="font-mono text-emerald-400">INF_ICM</code>). If empty, the dropdown below will apply.
+                  4. <strong className="text-foreground">DepartmentCode</strong>: Target registry (e.g. <code className="font-mono text-emerald-400">AUD_TAX</code>, <code className="font-mono text-emerald-400">MGT_ACC</code>, <code className="font-mono text-emerald-400">FIN_ACC</code>, <code className="font-mono text-emerald-400">INF_TECH</code>, <code className="font-mono text-emerald-400">INF_SYS</code>, <code className="font-mono text-emerald-400">INF_ICM</code>). The .xlsx template provides this as a dropdown.
                   <br />
-                  5. <strong className="text-foreground">LecturerEmailOrName</strong> (Optional): Email or custom name of the staff member allocated to the module. If matches our registry email, profile link will be automated.
+                  5. <strong className="text-foreground">LecturerEmailOrName</strong>: Email or custom name of the staff member allocated to the module. If matches our registry email, profile link will be automated.
                   <br />
-                  6. <strong className="text-foreground">ExitLevel</strong> (Optional): Enter <code className="font-mono text-amber-400">YES</code> or <code className="font-mono text-amber-400">NO</code>. Denotes if module is exit-level (requires both internal & external moderation). Defaults to NO.
+                  6. <strong className="text-foreground">ExitLevel</strong>: Enter <code className="font-mono text-amber-400">YES</code> or <code className="font-mono text-amber-400">NO</code>. Denotes if module is exit-level (requires both internal & external moderation). The .xlsx template provides this as a dropdown.
                 </p>
               </div>
 
