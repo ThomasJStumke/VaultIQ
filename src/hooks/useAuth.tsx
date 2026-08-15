@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { reportSecurityEvent } from '../lib/report-security-event';
 import { UserProfile, UserRole } from '../types';
 import {
   getUserRoleAssignments,
@@ -128,6 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoginError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      reportSecurityEvent("auth.login_failed", email);
       setLoginError(error.message);
       throw error;
     }

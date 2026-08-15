@@ -208,6 +208,54 @@ VaultIQ Institutional Administration
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Server-side relay from this app's browser client to Mission Control's runtime
+  // security event pipeline (mc_security_events / POST /api/security/events). The
+  // ingestion bearer token never reaches the browser -- this route re-signs the
+  // request server-side. Fails soft everywhere: no token configured -> 204 no-op;
+  // upstream failure -> swallowed. Must never affect a real user's sign-in.
+  app.post("/api/security-event", async (req, res) => {
+    try {
+      const token = process.env.MISSION_CONTROL_SECURITY_TOKEN;
+      if (!token) return res.status(204).end();
+
+      const allowed = new Set(["auth.login_failed", "auth.signup_failed"]);
+      const eventType = req.body?.eventType;
+      if (!eventType || !allowed.has(eventType)) return res.status(204).end();
+
+      const crypto = await import("node:crypto");
+      const sha256Hex = (input: string) => crypto.createHash("sha256").update(input).digest("hex").slice(0, 12);
+      const emailHash = req.body?.emailHint ? sha256Hex(String(req.body.emailHint).toLowerCase().trim()) : null;
+      const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+      const ipHash = ip ? sha256Hex(ip) : null;
+      const fingerprint = `${eventType}:${emailHash ?? "unknown"}:${ipHash ?? "unknown"}`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      await fetch("https://missioncontrol.distinct-app.com/api/security/events", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          estate: "DISTINCT",
+          application_id: "vaultiq",
+          environment: "production",
+          source: "supabase-auth",
+          event_type: eventType,
+          category: "Authentication",
+          severity: "medium",
+          title: eventType === "auth.login_failed" ? "Repeated failed login attempt" : "Repeated failed sign-up attempt",
+          description: "Aggregated from client-reported Supabase Auth failures. Not evidence of an attack by itself -- see occurrence_count for volume before escalating.",
+          fingerprint,
+          actor_ip_hash: ipHash,
+          metadata: { email_hash_prefix: emailHash },
+        }),
+        signal: controller.signal,
+      }).catch(() => {}).finally(() => clearTimeout(timeout));
+    } catch {
+      // swallow -- see header comment
+    }
+    return res.status(204).end();
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
