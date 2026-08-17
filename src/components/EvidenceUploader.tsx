@@ -86,7 +86,7 @@ export default function EvidenceUploader({ module, onClose }: EvidenceUploaderPr
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-overlay backdrop-blur-sm">
         <div className="glass-card p-12 flex flex-col items-center gap-6">
-          <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] animate-bounce">
+          <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] animate-pulse">
             <CheckCircle2 className="w-10 h-10 text-foreground" />
           </div>
           <h3 className="text-2xl font-black text-foreground tracking-tight">Artifact Transmitted</h3>
@@ -125,7 +125,7 @@ export default function EvidenceUploader({ module, onClose }: EvidenceUploaderPr
         <div className="p-10 space-y-10">
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest italic ml-1 text-gradient">Audit Type Classification</label>
+              <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest italic ml-1">Audit Type Classification</label>
               <select 
                 value={evidenceType}
                 onChange={(e) => setEvidenceType(e.target.value)}
@@ -139,7 +139,7 @@ export default function EvidenceUploader({ module, onClose }: EvidenceUploaderPr
               </select>
             </div>
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest italic ml-1 text-gradient">Semester / Year Node</label>
+              <label className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest italic ml-1">Semester / Year Node</label>
               <div className="p-4 bg-surface-tint border border-border rounded-2xl text-sm font-black text-foreground/80 tracking-tight">
                 Semester 2, 2026
               </div>
@@ -167,7 +167,7 @@ export default function EvidenceUploader({ module, onClose }: EvidenceUploaderPr
               <p className="relative z-10 text-lg font-black text-foreground mb-2 tracking-tight">
                 {file ? file.name : "Drop artifact node or click to browse"}
               </p>
-              <p className="relative z-10 text-[10px] text-subtle-foreground font-extrabold uppercase tracking-[0.2em]">Institutional PDF Standard • Max 10MB</p>
+              <p className="relative z-10 text-[10px] text-subtle-foreground font-extrabold uppercase tracking-[0.2em]">Institutional PDF Standard • Max {MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB</p>
             </div>
 
             {file && !committed && (

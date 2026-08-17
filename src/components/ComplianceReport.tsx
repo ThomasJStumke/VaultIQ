@@ -34,7 +34,7 @@ export default function ComplianceReport() {
         <div className="lg:col-span-1 space-y-6">
           <div className="glass-card p-8 text-center relative overflow-hidden group">
             <div className="absolute inset-0 bg-indigo-500/5 blur-[40px] rounded-full group-hover:scale-125 transition-transform duration-1000" />
-            <p className="relative z-10 text-[10px] font-black text-subtle-foreground uppercase tracking-widest mb-6 italic text-gradient">Readiness Pulse</p>
+            <p className="relative z-10 text-[10px] font-black text-subtle-foreground uppercase tracking-widest mb-6 italic">Readiness Pulse</p>
             <div className="relative z-10 inline-flex items-center justify-center w-36 h-36 rounded-full border-8 border-border-subtle relative mb-6">
                <svg className="absolute inset-0 w-full h-full -rotate-90">
                  <circle cx="72" cy="72" r="64" fill="none" stroke="currentColor" strokeWidth="8" strokeDasharray="402.12" strokeDashoffset={402.12 * (1 - 0.88)} strokeLinecap="round" className="text-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
