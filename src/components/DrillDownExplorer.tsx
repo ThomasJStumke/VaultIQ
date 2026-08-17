@@ -496,7 +496,7 @@ export default function DrillDownExplorer({ initialFacultyId, initialDeptId, ini
               Drill-Down <span className="text-indigo-400">Compliance Explorer</span>
             </h3>
             <p className="text-muted-foreground text-xs font-semibold mt-1">
-              Move seamlessly from institutional high-level rates down to supporting evidentiary PDFs without search friction.
+              Trace institutional compliance rates down to the supporting evidentiary PDFs behind them.
             </p>
           </div>
           

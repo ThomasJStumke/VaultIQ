@@ -408,7 +408,7 @@ export default function ExamVault({ initialTab }: { initialTab?: 'dashboard' | '
                    </div>
                  ) : !isUnlocked ? (
                   <div className="p-8 bg-surface-sunken rounded-3xl border border-border-subtle backdrop-blur-sm text-center">
-                     <Lock className="w-12 h-12 text-subtle-foreground mx-auto mb-4 animate-bounce" />
+                     <Lock className="w-12 h-12 text-subtle-foreground mx-auto mb-4 animate-pulse" />
                      <h4 className="text-foreground font-black text-lg">Decryption Authorization Required</h4>
                      <p className="text-subtle-foreground text-xs mt-1 mb-6 uppercase tracking-wider leading-relaxed">
                        This examination paper is locked under cryptographic hash controls. <br />

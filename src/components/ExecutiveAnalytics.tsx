@@ -111,11 +111,11 @@ export default function ExecutiveAnalytics() {
           className="text-left w-full transition-transform active:scale-98"
           title="Click to Drill Down"
         >
-          <KPICard title="Compliance Index" value="78.4%" icon={Target} 趋势={+2.4} color="blue" isInteractive />
+          <KPICard title="Compliance Index" value="78.4%" icon={Target} trend={2.4} color="blue" isInteractive />
         </button>
-        <KPICard title="Audit Overdue" value="14" icon={AlertOctagon} 趋势={-3} color="rose" />
-        <KPICard title="Retention Risk" value="High" icon={ShieldAlert} 趋势={+12} color="amber" />
-        <KPICard title="Moderation Yield" value="94%" icon={BarChart3} 趋势={+0.5} color="emerald" />
+        <KPICard title="Audit Overdue" value="14" icon={AlertOctagon} trend={-3} color="rose" />
+        <KPICard title="Retention Risk" value="High" icon={ShieldAlert} trend={12} color="amber" />
+        <KPICard title="Moderation Yield" value="94%" icon={BarChart3} trend={0.5} color="emerald" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -218,7 +218,7 @@ function ArrowLeft({ className }: { className?: string }) {
   );
 }
 
-function KPICard({ title, value, icon: Icon, 趋势, color, isInteractive }: any) {
+function KPICard({ title, value, icon: Icon, trend, color, isInteractive }: any) {
   const colors: any = {
     blue: 'text-blue-500 bg-blue-500/10 border border-blue-500/20',
     rose: 'text-rose-500 bg-rose-500/10 border border-rose-500/20',
@@ -237,9 +237,9 @@ function KPICard({ title, value, icon: Icon, 趋势, color, isInteractive }: any
         </div>
         <div className={cn(
           "text-[10px] font-black flex items-center gap-1",
-          趋势 > 0 ? "text-emerald-500" : "text-rose-500"
+          trend > 0 ? "text-emerald-500" : "text-rose-500"
         )}>
-          {趋势 > 0 ? '+' : ''}{趋势}%
+          {trend > 0 ? '+' : ''}{trend}%
         </div>
       </div>
       <p className="text-[10px] font-black text-subtle-foreground uppercase tracking-widest mb-1">{title}</p>

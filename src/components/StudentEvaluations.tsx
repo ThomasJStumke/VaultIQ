@@ -913,7 +913,7 @@ export default function StudentEvaluations({ initialTab }: { initialTab?: 'kpi' 
               <div className="p-6 bg-gradient-to-r from-violet-950/30 via-surface to-indigo-950/30 border border-violet-500/20 rounded-3xl grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                 <div className="md:col-span-2 space-y-2">
                   <div className="flex items-center gap-2 text-violet-400">
-                    <Award className="w-5 h-5 animate-bounce" />
+                    <Award className="w-5 h-5 animate-pulse" />
                     <span className="text-xs font-black uppercase tracking-widest">CQPA Corrective Developmental Mandate</span>
                   </div>
                   <h3 className="text-xl font-black text-foreground uppercase tracking-tight">Syllabus & Lecturer Action Hub</h3>

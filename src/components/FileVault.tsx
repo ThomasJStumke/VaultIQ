@@ -1926,7 +1926,7 @@ export default function FileVault({ initialTab }: { initialTab?: 'explorer' | 't
               {/* Drag over overlay */}
               {dragOverModal && (
                 <div className="absolute inset-0 bg-indigo-600/25 border-4 border-dashed border-indigo-500/80 z-40 flex flex-col items-center justify-center pointer-events-none text-foreground font-black uppercase tracking-wider backdrop-blur-xs">
-                  <Upload className="w-14 h-14 animate-bounce mb-3 text-indigo-300" />
+                  <Upload className="w-14 h-14 animate-pulse mb-3 text-indigo-300" />
                   Release to Add Document to Vault
                 </div>
               )}

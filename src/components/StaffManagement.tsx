@@ -1059,7 +1059,7 @@ export default function StaffManagement() {
               accept=".csv,.xlsx,.xls"
               className="hidden"
             />
-            <Upload className={cn("w-8 h-8", isDragging ? "text-emerald-400 animate-bounce" : "text-indigo-400")} />
+            <Upload className={cn("w-8 h-8", isDragging ? "text-emerald-400 animate-pulse" : "text-indigo-400")} />
             <p className="text-xs font-black uppercase tracking-wider text-foreground/90">
               {isDragging ? "Drop your Excel or CSV file here!" : "Drag & Drop .xlsx or .csv staff template here"}
             </p>

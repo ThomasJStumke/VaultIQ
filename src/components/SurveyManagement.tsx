@@ -812,7 +812,7 @@ export default function SurveyManagement({ initialQpoSubTab }: { initialQpoSubTa
   if (profile?.role !== 'QPO') {
     return (
       <div className="p-8 max-w-4xl mx-auto glass-card border border-rose-500/10 text-center space-y-4">
-        <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto animate-bounce" />
+        <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto animate-pulse" />
         <h2 className="text-xl font-black text-foreground uppercase tracking-wider">Access Restricted</h2>
         <p className="text-muted-foreground font-semibold text-sm leading-relaxed max-w-xl mx-auto">
           The "Survey Management" console contains sensitive parameters governing the distribution and schedule of institutional questionnaires. Access is strictly limited to the Quality Promotion Officer (QPO).
